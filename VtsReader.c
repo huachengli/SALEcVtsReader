@@ -243,4 +243,259 @@ void FloatToUnsignedChar(float * _farray, int _fnn, unsigned char * _carray)
     }
 }
 
+void ReadVtsBinaryF32(float * _data,unsigned long * _dlen,FILE * fp)
+{
+    unsigned char HeadB64[24],HeadChar[16];
+    fread(HeadB64, sizeof(char),24,fp);
+    Base64Decode(HeadB64,24,HeadChar);
+    int HeadInt[4];
+    /*
+     * HeadInt[0]= [const int]
+     * HeadInt[1] = HeadInt[2] length of data uncompressed
+     * HeadInt[3] = length of data compressed
+     */
+    memcpy(HeadInt,HeadChar,16);
 
+    unsigned char *BodyB64,*BodyComp,*BodyUncomp;
+    unsigned long BodyB64Len = 4*ceil((double) HeadInt[3]/3.0);
+    unsigned long BodyCompLen = HeadInt[3];
+    unsigned long BodyUncompLen = HeadInt[2];
+
+    BodyB64 = (unsigned char*) malloc(sizeof(unsigned char)*BodyB64Len);
+    fread(BodyB64, sizeof(unsigned char),BodyB64Len,fp);
+
+    BodyComp = (unsigned char*) malloc(sizeof(unsigned char)*BodyCompLen);
+    Base64Decode(BodyB64,BodyB64Len,BodyComp);
+    free(BodyB64);
+
+    BodyUncomp = (unsigned char*) malloc(sizeof(unsigned char)*BodyUncompLen);
+    uncompress(BodyUncomp,&BodyUncompLen,BodyComp,BodyCompLen);
+    free(BodyComp);
+
+    *_dlen = BodyUncompLen/4;
+    _data = (float *) malloc(sizeof(float)*(*_dlen));
+    memcpy(_data,BodyUncomp,BodyUncompLen);
+    free(BodyUncomp);
+}
+
+
+char * rtrim(char *str)
+{
+    if (str == NULL || *str == '\0')
+    {
+        return str;
+    }
+
+    int len = strlen(str);
+    char *p = str + len - 1;
+    while (p >= str  && isspace(*p))
+    {
+        *p = '\0';
+        --p;
+    }
+    return str;
+}
+
+char * ltrim(char *str)
+{
+    if (str == NULL || *str == '\0')
+    {
+        return str;
+    }
+
+    int len = 0;
+    char *p = str;
+    while (*p != '\0' && (isspace(*p) || (*p=='.')))
+    {
+        ++p;
+        ++len;
+    }
+    memmove(str, p, strlen(str) - len + 1);
+    return str;
+}
+
+char *trim(char *str)
+{
+    str = rtrim(str);
+    str = ltrim(str);
+    return str;
+}
+
+int InSubset(char _c,const char _set[])
+{
+    const char * p = _set;
+    for(;*p!='\0';p++)
+    {
+        if(*p==_c)
+            return 1;
+    }
+    return 0;
+}
+
+int Strok(const char _str[],const char _delim[], char value[])
+{
+    const char * p = _str;
+    int k=0,i=0;
+    for(;*p!='\0';p++)
+    {
+        if(InSubset(*p,_delim))
+        {
+            if(k==0)
+                continue;
+            else
+                break;
+        } else
+        {
+            value[k++] = *p;
+        }
+        i++;
+    }
+    for(;*p!='\0';p++)
+    {
+        if(!InSubset(*p,_delim)) break;
+        i++;
+    }
+    value[k] = '\0';
+    return i;
+}
+
+int ReadLineTrim(unsigned char _buffer[],FILE *fp)
+{
+    fscanf(fp,"%[^\n]",_buffer);
+    fgetc(fp);
+    trim(_buffer);
+    return strlen(_buffer);
+}
+
+
+void VtsLoad(VtsInfo * _vfp,FILE * fp)
+{
+    _vfp->VtsStack = (VtsStackFrame *) malloc(sizeof(VtsStackFrame)*MaxStackDepth);
+    _vfp->StackPos = 0;
+    _vfp->Field = (VtsData *) malloc(sizeof(VtsData)*MaxStackDepth);
+    _vfp->NoF = 0;
+
+    VtsFrameHeadLoad(_vfp,fp);
+
+    while(VtsFrameLoad(_vfp,fp))
+    {
+
+    }
+}
+
+int VtsFrameHeadLoad(VtsInfo * _vfp,FILE *fp)
+{
+    /*
+     * Read the first line of vts file
+     */
+
+    unsigned char LineBuffer[1024];
+    ReadLineTrim(LineBuffer,fp);
+    VtsStackFrame * _vsf = _vfp->VtsStack + _vfp->StackPos;
+
+    unsigned char SALEcVtsHead[] = "<?xml version=\"1.0\"?>";
+    if(0!= strcmp(SALEcVtsHead,LineBuffer))
+    {
+        fprintf(stdout,"Wranning/the header of vts is not consistent with SALEc!\n");
+        exit(0);
+    }
+
+    strcpy(_vsf->Name,LineBuffer);
+    _vsf->Tag = SALEC_VTS_HEADER;
+    _vfp->StackPos ++;
+    return 1;
+}
+
+unsigned char TagName[][100] = {
+        "VTKFile",
+        "/VTKFile",
+        "StructuredGrid",
+        "/StructuredGrid",
+        "Piece",
+        "/Piece",
+        "PointData",
+        "/PointData",
+        "DataArray",
+        "/DataArray",
+        "Points",
+        "/Points",
+        "CellData",
+        "/CellData"
+};
+
+void TagVTKFileBeginFunc(const char* _values,VtsInfo * _vfp)
+{
+    VtsStackFrame * _vsf = _vfp->VtsStack + _vfp->StackPos;
+    _vsf->Tag = SALEC_VTS_VTKFILE;
+    strcpy(_vsf->Name,"VTKFileBegin");
+    _vfp->StackPos ++;
+}
+void TagVTKFileEndFunc(const char* _values,VtsInfo * _vfp)
+{
+    VtsStackFrame * _vsf = _vfp->VtsStack + _vfp->StackPos - 1;
+    if(_vsf->Tag!=SALEC_VTS_VTKFILE)
+    {
+        fprintf(stdout,"VTKFile Tag does not match!\n");
+        exit(0);
+    } else
+    {
+        _vfp->StackPos --;
+    }
+}
+
+void TagStructuredGridBeginFunc(const char* _values,VtsInfo * _vfp)
+{
+    VtsStackFrame * _vsf = _vfp->VtsStack + _vfp->StackPos;
+    _vsf->Tag = SALEC_VTS_STRUCTUREDGRID;
+    strcpy(_vsf->Name,"StructuredGrid");
+    _vfp->StackPos ++;
+}
+void TagStructuredGridEndFunc(const char* _values,VtsInfo * _vfp)
+{
+    VtsStackFrame * _vsf = _vfp->VtsStack + _vfp->StackPos - 1;
+    if(_vsf->Tag!=SALEC_VTS_STRUCTUREDGRID)
+    {
+        fprintf(stdout,"StructuredGrid Tag does not match!\n");
+        exit(0);
+    } else
+    {
+        _vfp->StackPos --;
+    }
+}
+void TagPieceBeginFunc(const char* _values,VtsInfo * _vfp)
+{
+
+}
+
+
+
+typedef void (*TagNameFunction)(const char*,VtsInfo *);
+TagNameFunction TagNameP[] = {
+        TagVTKFileBeginFunc,
+        TagVTKFileEndFunc,
+
+};
+
+
+
+int VtsFrameLoad(VtsStackFrame * _vsf,FILE *fp)
+{
+    unsigned char LineBuffer[1024];
+    ReadLineTrim(LineBuffer,fp);
+
+    char tKey[100];
+    int r = Strok(LineBuffer+1," ",tKey)+1;
+//    VtsTagParaser(tKey,LineBuffer+r,_vsf);
+    int k = 0;
+    for(;k<SALEC_VTS_TAG_TYPES;++k)
+    {
+        if(0==strcmp(tKey,TagName[k])) break;
+    }
+    if(k==SALEC_VTS_TAG_TYPES)
+    {
+        fprintf(stdout,"Undefined TagName:%s\n",tKey);
+        exit(0);
+    }
+
+
+}

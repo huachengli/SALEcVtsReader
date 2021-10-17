@@ -2,6 +2,34 @@
 #include "VtsReader.h"
 #include <math.h>
 
+int main()
+{
+    const char TestDataFile[] = "../Al1100Test.proc188.1.vts";
+    int DataLine = 7;
+
+    FILE * fp = fopen(TestDataFile,"r");
+    if(NULL==fp)
+    {
+        fprintf(stdout,"can not open %s\n",TestDataFile);
+        exit(0);
+    }
+
+    char LineBuffer[1024];
+    for(int k=0;k<DataLine-1;++k)
+    {
+        fscanf(fp,"%[^\n]",LineBuffer);
+        fgetc(fp);
+        fprintf(stdout,"%s\n",LineBuffer);
+    }
+
+    float * FdataArray;
+    unsigned long * FdataLen;
+    ReadVtsBinaryF32(FdataArray,FdataLen,fp);
+
+    return 0;
+}
+
+
 int TestTypeCast()
 {
     int TestIntLen = 50;
