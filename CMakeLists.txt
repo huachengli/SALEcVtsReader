@@ -6,4 +6,4 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0")
 set(CMAKE_C_COMPILER gcc)
 LINK_LIBRARIES(m z)
 
-add_executable(SALEcVtsReader main.c VtsReader.c VtsReader.h)
+add_executable(SALEcVtsReader main.c VtsTag.c VtsReader.c)

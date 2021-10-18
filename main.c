@@ -5,6 +5,24 @@
 int main()
 {
     const char TestDataFile[] = "../Al1100Test.proc188.1.vts";
+    FILE * fp = fopen(TestDataFile,"r");
+    if(NULL==fp)
+    {
+        fprintf(stdout,"can not open %s\n",TestDataFile);
+        exit(0);
+    }
+
+    VtsInfo VSF;
+    VtsLoad(&VSF,fp);
+
+    fclose(fp);
+    return 1;
+}
+
+
+int TestBinaryRead()
+{
+    const char TestDataFile[] = "../Al1100Test.proc188.1.vts";
     int DataLine = 7;
 
     FILE * fp = fopen(TestDataFile,"r");
@@ -22,10 +40,10 @@ int main()
         fprintf(stdout,"%s\n",LineBuffer);
     }
 
-    float * FdataArray;
+    float ** FdataArray;
     unsigned long * FdataLen;
     ReadVtsBinaryF32(FdataArray,FdataLen,fp);
-
+    fclose(fp);
     return 0;
 }
 
@@ -35,7 +53,7 @@ int TestTypeCast()
     int TestIntLen = 50;
     int TestCharLen = sizeof(int) / sizeof(unsigned char) * TestIntLen + 1;
 
-    fprintf(stdout,"%d\n", sizeof(unsigned char));
+    fprintf(stdout,"%ld\n", sizeof(unsigned char));
 
     int *IntArray = (int *) malloc(sizeof(int) * TestIntLen);
     unsigned char *ChrArray1 = (unsigned char *) malloc(sizeof(unsigned char) * TestCharLen);
@@ -95,19 +113,19 @@ int TestCompress()
         exit(0);
     } else
     {
-        fprintf(stdout,"orignal size: %d,compressd size:%d\n",TestStrLen,CompLen);
+        fprintf(stdout,"orignal size: %d,compressd size:%ld\n",TestStrLen,CompLen);
     }
 
-    fprintf(stdout,"rLen:%ld\n",TestStrLen);
+    fprintf(stdout,"rLen:%d\n",TestStrLen);
     CompErr = uncompress(UncompStr,&UncompLen,CompStr,CompLen);
-    fprintf(stdout,"rLen:%ld\n",TestStrLen);
+    fprintf(stdout,"rLen:%d\n",TestStrLen);
 
     if(Z_OK!=CompErr)
     {
         fprintf(stdout,"Uncompress error!\n");
     } else
     {
-        fprintf(stdout,"orignal size: %d,uncompressd size:%d\n",TestStrLen,UncompLen);
+        fprintf(stdout,"orignal size: %d,uncompressd size:%ld\n",TestStrLen,UncompLen);
     }
 
     if(strcmp(UncompStr,TestStr))
@@ -118,7 +136,6 @@ int TestCompress()
         fprintf(stdout,"uncompress succeed: >%s\n",UncompStr);
     }
     return 0;
-
 }
 
 

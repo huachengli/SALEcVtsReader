@@ -11,22 +11,33 @@
 #include <zlib.h>
 #include <assert.h>
 #include <math.h>
+#include <ctype.h>
 
 #define VTSDIM 3
 #define MaxNameLen 50
-#define MaxStackDepth 512
-#define VTSDATAFLOAT double
+#define MaxStackDepth 50
+#define VTSDATAFLOAT float
 
 #define SALEC_VTS_TAG_TYPES 14
 #define SALEC_VTS_HEADER 1
 #define SALEC_VTS_VTKFILE 5
 #define SALEC_VTS_STRUCTUREDGRID 9
+#define SALEC_VTS_PIECE 13
+#define SALEC_VTS_POINTDATA 17
+#define SALEC_VTS_DATAARRAY 21
+#define SALEC_VTS_DATAARRAY_OPTS 4
+#define SALEC_VTS_CELLDATA 25
+#define SALEC_VTS_POINTS 29
+#define SALEC_VTS_NONE 0
 
 typedef struct
 {
     char Name[MaxNameLen];
+    char Type[MaxNameLen];
+    char Format[MaxNameLen];
     unsigned int NoC; /* NumberOfComponent */
-    VTSDATAFLOAT *** Data;
+    VTSDATAFLOAT * Data;
+    unsigned long DataLen;
 } VtsData;
 
 typedef struct
@@ -39,14 +50,19 @@ typedef struct
 {
     unsigned int PieceExtent[VTSDIM][2];
     unsigned int WholeExtent[VTSDIM][2];
-    double *** Point;
-    double *** Cell;
+    VTSDATAFLOAT **** Point;
+    VTSDATAFLOAT **** Cell;
 
-    unsigned int NoF; /*NumberOfField*/
-    VtsData * Field;
+    unsigned int CellNoF; /*NumberOfField*/
+    VtsData * CellField;
+
+    unsigned int PointNoF;
+    VtsData * PointField;
 
     VtsStackFrame * VtsStack;
     unsigned int StackPos;
+    unsigned int DataNodeType;
+    VtsData * ActiveVtsData;
 } VtsInfo;
 
 
@@ -65,11 +81,12 @@ void IntToUnsignedChar(int * _iarray, int _inn, unsigned char * _carray);
 void UnsignedCharToInt(unsigned char * _carray, int _cnn, int * _iarray);
 void FloatToUnsignedChar(float * _farray, int _fnn, unsigned char * _carray);
 
-void ReadVtsBinaryF32(float * _data,unsigned long * _dlen,FILE * fp);
+void ReadVtsBinaryF32(float ** _data,unsigned long * _dlen,FILE * fp);
 void VtsLoad(VtsInfo * _vfp,FILE * fp);
 int VtsFrameHeadLoad(VtsInfo * _vsp,FILE *fp);
-int VtsFrameLoad(VtsStackFrame * _vsf,FILE *fp);
-
+int VtsFrameLoad(VtsInfo * _vsf,FILE *fp);
+int VtsCoordinateReshape(VtsInfo * _vsf);
+void VtsInfoClean(VtsInfo * _vsf);
 /*
  * basic string processing
  */
@@ -77,4 +94,13 @@ char *trim(char *str);
 int Strok(const char _str[],const char _delim[], char value[]);
 int InSubset(char _c,const char _set[]);
 int ReadLineTrim(unsigned char _buffer[],FILE *fp);
+
+
+/*
+ * Some Tag processing function in VtsTag
+ */
+extern void (*ReadDataArrayProperty[])(const char * _vbuffer, unsigned int * _start,VtsData * _vdp);
+extern char DataArrayProperty[][100];
+extern char TagName[][100];
+extern void (*TagNameP[])(const char*,VtsInfo *);
 #endif //SALECVTSREADER_VTSREADER_H

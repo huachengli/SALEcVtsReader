@@ -3,12 +3,6 @@
 //
 
 #include "VtsReader.h"
-#define CHECK_ERR(err, msg) { \
-    if (err != Z_OK) { \
-        fprintf(stderr, "%s error: %d\n", msg, err); \
-        exit(1); \
-    } \
-}
 
 void Base64Encode(unsigned char * _str, unsigned int _slen, unsigned char * _code)
 {
@@ -243,7 +237,7 @@ void FloatToUnsignedChar(float * _farray, int _fnn, unsigned char * _carray)
     }
 }
 
-void ReadVtsBinaryF32(float * _data,unsigned long * _dlen,FILE * fp)
+void ReadVtsBinaryF32(float ** _data,unsigned long * _dlen,FILE * fp)
 {
     unsigned char HeadB64[24],HeadChar[16];
     fread(HeadB64, sizeof(char),24,fp);
@@ -273,9 +267,10 @@ void ReadVtsBinaryF32(float * _data,unsigned long * _dlen,FILE * fp)
     free(BodyComp);
 
     *_dlen = BodyUncompLen/4;
-    _data = (float *) malloc(sizeof(float)*(*_dlen));
-    memcpy(_data,BodyUncomp,BodyUncompLen);
+    *_data = (float *) malloc(sizeof(float)*(*_dlen));
+    memcpy(*_data,BodyUncomp,BodyUncompLen);
     free(BodyUncomp);
+    fgetc(fp);
 }
 
 
@@ -372,15 +367,23 @@ void VtsLoad(VtsInfo * _vfp,FILE * fp)
 {
     _vfp->VtsStack = (VtsStackFrame *) malloc(sizeof(VtsStackFrame)*MaxStackDepth);
     _vfp->StackPos = 0;
-    _vfp->Field = (VtsData *) malloc(sizeof(VtsData)*MaxStackDepth);
-    _vfp->NoF = 0;
+    _vfp->CellField = (VtsData *) malloc(sizeof(VtsData)*MaxStackDepth);
+    _vfp->CellNoF = 0;
+    _vfp->PointField = (VtsData *) malloc(sizeof(VtsData)*MaxStackDepth);
+    _vfp->PointNoF = 0;
 
     VtsFrameHeadLoad(_vfp,fp);
-
     while(VtsFrameLoad(_vfp,fp))
     {
-
+        fprintf(stdout,"$\n");
+        VtsStackFrame * _vsf = _vfp->StackPos - 1 + _vfp->VtsStack;
+        if(_vsf->Tag == SALEC_VTS_DATAARRAY)
+        {
+            ReadVtsBinaryF32(&(_vfp->ActiveVtsData->Data),&(_vfp->ActiveVtsData->DataLen),fp);
+        }
     }
+
+    VtsCoordinateReshape(_vfp);
 }
 
 int VtsFrameHeadLoad(VtsInfo * _vfp,FILE *fp)
@@ -406,85 +409,13 @@ int VtsFrameHeadLoad(VtsInfo * _vfp,FILE *fp)
     return 1;
 }
 
-unsigned char TagName[][100] = {
-        "VTKFile",
-        "/VTKFile",
-        "StructuredGrid",
-        "/StructuredGrid",
-        "Piece",
-        "/Piece",
-        "PointData",
-        "/PointData",
-        "DataArray",
-        "/DataArray",
-        "Points",
-        "/Points",
-        "CellData",
-        "/CellData"
-};
-
-void TagVTKFileBeginFunc(const char* _values,VtsInfo * _vfp)
-{
-    VtsStackFrame * _vsf = _vfp->VtsStack + _vfp->StackPos;
-    _vsf->Tag = SALEC_VTS_VTKFILE;
-    strcpy(_vsf->Name,"VTKFileBegin");
-    _vfp->StackPos ++;
-}
-void TagVTKFileEndFunc(const char* _values,VtsInfo * _vfp)
-{
-    VtsStackFrame * _vsf = _vfp->VtsStack + _vfp->StackPos - 1;
-    if(_vsf->Tag!=SALEC_VTS_VTKFILE)
-    {
-        fprintf(stdout,"VTKFile Tag does not match!\n");
-        exit(0);
-    } else
-    {
-        _vfp->StackPos --;
-    }
-}
-
-void TagStructuredGridBeginFunc(const char* _values,VtsInfo * _vfp)
-{
-    VtsStackFrame * _vsf = _vfp->VtsStack + _vfp->StackPos;
-    _vsf->Tag = SALEC_VTS_STRUCTUREDGRID;
-    strcpy(_vsf->Name,"StructuredGrid");
-    _vfp->StackPos ++;
-}
-void TagStructuredGridEndFunc(const char* _values,VtsInfo * _vfp)
-{
-    VtsStackFrame * _vsf = _vfp->VtsStack + _vfp->StackPos - 1;
-    if(_vsf->Tag!=SALEC_VTS_STRUCTUREDGRID)
-    {
-        fprintf(stdout,"StructuredGrid Tag does not match!\n");
-        exit(0);
-    } else
-    {
-        _vfp->StackPos --;
-    }
-}
-void TagPieceBeginFunc(const char* _values,VtsInfo * _vfp)
-{
-
-}
-
-
-
-typedef void (*TagNameFunction)(const char*,VtsInfo *);
-TagNameFunction TagNameP[] = {
-        TagVTKFileBeginFunc,
-        TagVTKFileEndFunc,
-
-};
-
-
-
-int VtsFrameLoad(VtsStackFrame * _vsf,FILE *fp)
+int VtsFrameLoad(VtsInfo * _vsf,FILE *fp)
 {
     unsigned char LineBuffer[1024];
     ReadLineTrim(LineBuffer,fp);
 
     char tKey[100];
-    int r = Strok(LineBuffer+1," ",tKey)+1;
+    int r = Strok(LineBuffer+1," <>",tKey)+1;
 //    VtsTagParaser(tKey,LineBuffer+r,_vsf);
     int k = 0;
     for(;k<SALEC_VTS_TAG_TYPES;++k)
@@ -495,7 +426,79 @@ int VtsFrameLoad(VtsStackFrame * _vsf,FILE *fp)
     {
         fprintf(stdout,"Undefined TagName:%s\n",tKey);
         exit(0);
+    } else
+    {
+        TagNameP[k](LineBuffer+r,_vsf);
+    }
+    return _vsf->StackPos - 1;
+}
+
+int VtsCoordinateReshape(VtsInfo * _vsf)
+{
+    int k = 0;
+    for(;k<_vsf->PointNoF;++k)
+    {
+        if(0== strcasecmp("coordinate",_vsf->PointField[k].Name)) break;
     }
 
+    if(k==_vsf->PointNoF)
+    {
+        fprintf(stdout,"No coordinate information in the vts!\n");
+    }
+    VTSDATAFLOAT * PointData = _vsf->PointField[k].Data;
+    unsigned long PointDataLen = _vsf->PointField[k].DataLen;
 
+
+    unsigned int nx0 = _vsf->PieceExtent[0][1]-_vsf->PieceExtent[0][0]+1;
+    unsigned int nx1 = _vsf->PieceExtent[1][1]-_vsf->PieceExtent[1][0]+1;
+    unsigned int nx2 = _vsf->PieceExtent[2][1]-_vsf->PieceExtent[2][0]+1;
+
+    if(nx0*nx1*nx2*VTSDIM!=PointDataLen)
+    {
+        fprintf(stdout,"number of coordinates is %ld, but %d is wanted\n",PointDataLen,nx1*nx0*nx2*VTSDIM);
+        exit(0);
+    }
+
+    _vsf->Point = (VTSDATAFLOAT ****) malloc(sizeof(VTSDATAFLOAT ***)*nx0);
+    for(int xi0=0;xi0<nx0;++xi0)
+    {
+        _vsf->Point[xi0] = (VTSDATAFLOAT ***) malloc(sizeof(VTSDATAFLOAT **)*nx1);
+        for(int xi1=0;xi1<nx1;++xi1)
+        {
+            _vsf->Point[xi0][xi1] = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT *)*nx2);
+            for(unsigned long xi2=0;xi2<nx2;++xi2)
+            {
+                _vsf->Point[xi0][xi1][xi2] = PointData + (xi2 + xi1*nx0 + xi0*nx0*nx1)*VTSDIM;
+            }
+        }
+    }
+
+    return (int) PointDataLen;
 }
+
+void VtsInfoClean(VtsInfo * _vsf)
+{
+    for(int k=0;k<_vsf->PointNoF;++k)
+        free(_vsf->PointField[k].Data);
+    free(_vsf->PointField);
+
+    for(int k=0;k<_vsf->CellNoF;++k)
+        free(_vsf->CellField[k].Data);
+    free(_vsf->CellField);
+
+    free(_vsf->VtsStack);
+    unsigned int nx0 = _vsf->PieceExtent[0][1]-_vsf->PieceExtent[0][0]+1;
+    unsigned int nx1 = _vsf->PieceExtent[1][1]-_vsf->PieceExtent[1][0]+1;
+    unsigned int nx2 = _vsf->PieceExtent[2][1]-_vsf->PieceExtent[2][0]+1;
+
+    for(int xi0=0;xi0<nx0;++xi0)
+    {
+        for(int xi1=0;xi1<nx1;++xi1)
+        {
+            free(_vsf->Point[xi0][xi1]);
+        }
+        free(_vsf->Point[xi0]);
+    }
+    free(_vsf->Point);
+}
+
