@@ -48,10 +48,12 @@ typedef struct
 
 typedef struct
 {
-    unsigned int PieceExtent[VTSDIM][2];
-    unsigned int WholeExtent[VTSDIM][2];
+    unsigned long PieceExtent[VTSDIM][2];
+    unsigned long WholeExtent[VTSDIM][2];
+    unsigned long Nxp[VTSDIM];
     VTSDATAFLOAT **** Point;
     VTSDATAFLOAT **** Cell;
+    VTSDATAFLOAT ** CoordLine;
 
     unsigned int CellNoF; /*NumberOfField*/
     VtsData * CellField;
@@ -87,6 +89,8 @@ int VtsFrameHeadLoad(VtsInfo * _vsp,FILE *fp);
 int VtsFrameLoad(VtsInfo * _vsf,FILE *fp);
 int VtsCoordinateReshape(VtsInfo * _vsf);
 void VtsInfoClean(VtsInfo * _vsf);
+VTSDATAFLOAT * VtsGetPoint(VtsInfo * _vsf,unsigned long _i, unsigned long _j, unsigned long _k);
+void VtsSetCoordLine(VtsInfo * _vsf);
 /*
  * basic string processing
  */

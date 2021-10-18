@@ -15,7 +15,14 @@ int main()
     VtsInfo VSF;
     VtsLoad(&VSF,fp);
 
+    for(unsigned long k=0;k<100;k+=2)
+    {
+        VTSDATAFLOAT * _tpoint = VtsGetPoint(&VSF,k,0,0);
+        fprintf(stdout,"%04ld=[%20.10f,%20.10f,%20.10f]\n",k,_tpoint[0],_tpoint[1],_tpoint[2]);
+    }
+
     fclose(fp);
+    VtsInfoClean(&VSF);
     return 1;
 }
 

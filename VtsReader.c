@@ -375,7 +375,7 @@ void VtsLoad(VtsInfo * _vfp,FILE * fp)
     VtsFrameHeadLoad(_vfp,fp);
     while(VtsFrameLoad(_vfp,fp))
     {
-        fprintf(stdout,"$\n");
+//        fprintf(stdout,"$\n");
         VtsStackFrame * _vsf = _vfp->StackPos - 1 + _vfp->VtsStack;
         if(_vsf->Tag == SALEC_VTS_DATAARRAY)
         {
@@ -448,10 +448,13 @@ int VtsCoordinateReshape(VtsInfo * _vsf)
     VTSDATAFLOAT * PointData = _vsf->PointField[k].Data;
     unsigned long PointDataLen = _vsf->PointField[k].DataLen;
 
-
     unsigned int nx0 = _vsf->PieceExtent[0][1]-_vsf->PieceExtent[0][0]+1;
     unsigned int nx1 = _vsf->PieceExtent[1][1]-_vsf->PieceExtent[1][0]+1;
     unsigned int nx2 = _vsf->PieceExtent[2][1]-_vsf->PieceExtent[2][0]+1;
+
+    _vsf->Nxp[0] = nx0;
+    _vsf->Nxp[1] = nx1;
+    _vsf->Nxp[2] = nx2;
 
     if(nx0*nx1*nx2*VTSDIM!=PointDataLen)
     {
@@ -468,7 +471,7 @@ int VtsCoordinateReshape(VtsInfo * _vsf)
             _vsf->Point[xi0][xi1] = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT *)*nx2);
             for(unsigned long xi2=0;xi2<nx2;++xi2)
             {
-                _vsf->Point[xi0][xi1][xi2] = PointData + (xi2 + xi1*nx0 + xi0*nx0*nx1)*VTSDIM;
+                _vsf->Point[xi0][xi1][xi2] = PointData + (xi2 + xi1*nx2 + xi0*nx2*nx1)*VTSDIM;
             }
         }
     }
@@ -500,5 +503,50 @@ void VtsInfoClean(VtsInfo * _vsf)
         free(_vsf->Point[xi0]);
     }
     free(_vsf->Point);
+}
+
+VTSDATAFLOAT * VtsGetPoint(VtsInfo * _vsf,unsigned long _i, unsigned long _j, unsigned long _k)
+{
+    if((_i< 0) || (_i>=_vsf->Nxp[0]))
+    {
+        fprintf(stdout,"Point out of X-extent: [%ld,%ld,%ld]",_i,_j,_k);
+        exit(0);
+    } else if((_j< 0) || (_j>=_vsf->Nxp[1]))
+    {
+        fprintf(stdout,"Point out of Y-extent: [%ld,%ld,%ld]",_i,_j,_k);
+        exit(0);
+    } else if((_k< 0) || (_k>=_vsf->Nxp[2]))
+    {
+        fprintf(stdout,"Point out of Z-extent: [%ld,%ld,%ld]",_i,_j,_k);
+        exit(0);
+    } else
+    {
+        return _vsf->Point[_i][_j][_k];
+    }
+}
+
+void VtsSetCoordLine(VtsInfo * _vsf)
+{
+    _vsf->CoordLine = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*)*VTSDIM);
+    for(int k=0;k<VTSDIM;++k)
+    {
+        _vsf->CoordLine[k] = (VTSDATAFLOAT *) malloc(sizeof(VTSDATAFLOAT)*_vsf->Nxp[k]);
+    }
+
+    // Set X CoordLine
+    for(unsigned long xi=0;xi<_vsf->Nxp[0];++xi)
+    {
+        _vsf->CoordLine[0][xi] = VtsGetPoint(_vsf,0,0,xi)[0];
+    }
+    // Set Y CoordLine
+    for(unsigned long xi=0;xi<_vsf->Nxp[1];++xi)
+    {
+        _vsf->CoordLine[1][xi] = VtsGetPoint(_vsf,0,xi,0)[1];
+    }
+    // Set Z CoordLine
+    for(unsigned long xi=0;xi<_vsf->Nxp[2];++xi)
+    {
+        _vsf->CoordLine[2][xi] = VtsGetPoint(_vsf,xi,0,0)[2];
+    }
 }
 
