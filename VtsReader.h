@@ -12,6 +12,8 @@
 #include <assert.h>
 #include <math.h>
 #include <ctype.h>
+#include "InputParser.h"
+
 
 #define VTSDIM 3
 #define MaxNameLen 50
@@ -91,14 +93,6 @@ int VtsCoordinateReshape(VtsInfo * _vsf);
 void VtsInfoClean(VtsInfo * _vsf);
 VTSDATAFLOAT * VtsGetPoint(VtsInfo * _vsf,unsigned long _i, unsigned long _j, unsigned long _k);
 void VtsSetCoordLine(VtsInfo * _vsf);
-/*
- * basic string processing
- */
-char *trim(char *str);
-int Strok(const char _str[],const char _delim[], char value[]);
-int InSubset(char _c,const char _set[]);
-int ReadLineTrim(unsigned char _buffer[],FILE *fp);
-
 
 /*
  * Some Tag processing function in VtsTag

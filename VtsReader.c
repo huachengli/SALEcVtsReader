@@ -274,95 +274,6 @@ void ReadVtsBinaryF32(float ** _data,unsigned long * _dlen,FILE * fp)
 }
 
 
-char * rtrim(char *str)
-{
-    if (str == NULL || *str == '\0')
-    {
-        return str;
-    }
-
-    int len = strlen(str);
-    char *p = str + len - 1;
-    while (p >= str  && isspace(*p))
-    {
-        *p = '\0';
-        --p;
-    }
-    return str;
-}
-
-char * ltrim(char *str)
-{
-    if (str == NULL || *str == '\0')
-    {
-        return str;
-    }
-
-    int len = 0;
-    char *p = str;
-    while (*p != '\0' && (isspace(*p) || (*p=='.')))
-    {
-        ++p;
-        ++len;
-    }
-    memmove(str, p, strlen(str) - len + 1);
-    return str;
-}
-
-char *trim(char *str)
-{
-    str = rtrim(str);
-    str = ltrim(str);
-    return str;
-}
-
-int InSubset(char _c,const char _set[])
-{
-    const char * p = _set;
-    for(;*p!='\0';p++)
-    {
-        if(*p==_c)
-            return 1;
-    }
-    return 0;
-}
-
-int Strok(const char _str[],const char _delim[], char value[])
-{
-    const char * p = _str;
-    int k=0,i=0;
-    for(;*p!='\0';p++)
-    {
-        if(InSubset(*p,_delim))
-        {
-            if(k==0)
-                continue;
-            else
-                break;
-        } else
-        {
-            value[k++] = *p;
-        }
-        i++;
-    }
-    for(;*p!='\0';p++)
-    {
-        if(!InSubset(*p,_delim)) break;
-        i++;
-    }
-    value[k] = '\0';
-    return i;
-}
-
-int ReadLineTrim(unsigned char _buffer[],FILE *fp)
-{
-    fscanf(fp,"%[^\n]",_buffer);
-    fgetc(fp);
-    trim(_buffer);
-    return strlen(_buffer);
-}
-
-
 void VtsLoad(VtsInfo * _vfp,FILE * fp)
 {
     _vfp->VtsStack = (VtsStackFrame *) malloc(sizeof(VtsStackFrame)*MaxStackDepth);
@@ -384,6 +295,7 @@ void VtsLoad(VtsInfo * _vfp,FILE * fp)
     }
 
     VtsCoordinateReshape(_vfp);
+    VtsSetCoordLine(_vfp);
 }
 
 int VtsFrameHeadLoad(VtsInfo * _vfp,FILE *fp)
@@ -547,6 +459,12 @@ void VtsSetCoordLine(VtsInfo * _vsf)
     for(unsigned long xi=0;xi<_vsf->Nxp[2];++xi)
     {
         _vsf->CoordLine[2][xi] = VtsGetPoint(_vsf,xi,0,0)[2];
+    }
+
+    for(int k=0;k<_vsf->Nxp[0];++k)
+    {
+        fprintf(stdout,"%10.5f,",_vsf->CoordLine[0][k]);
+        if(k%10==9) fprintf(stdout,"\n");
     }
 }
 

@@ -1,10 +1,9 @@
 #include <stdio.h>
 #include "VtsReader.h"
-#include <math.h>
 
 int main()
 {
-    const char TestDataFile[] = "../Al1100Test.proc188.1.vts";
+    const char TestDataFile[] = "/home/huacheng/Documents/Github/data/pdata/Al1100Test.proc188.1.vts";
     FILE * fp = fopen(TestDataFile,"r");
     if(NULL==fp)
     {
@@ -15,7 +14,8 @@ int main()
     VtsInfo VSF;
     VtsLoad(&VSF,fp);
 
-    for(unsigned long k=0;k<100;k+=2)
+    fprintf(stdout,"\n");
+    for(unsigned long k=0;k<69;k+=2)
     {
         VTSDATAFLOAT * _tpoint = VtsGetPoint(&VSF,k,0,0);
         fprintf(stdout,"%04ld=[%20.10f,%20.10f,%20.10f]\n",k,_tpoint[0],_tpoint[1],_tpoint[2]);
@@ -29,7 +29,7 @@ int main()
 
 int TestBinaryRead()
 {
-    const char TestDataFile[] = "../Al1100Test.proc188.1.vts";
+    const char TestDataFile[] = "/home/huacheng/Documents/Github/data/pdata/Al1100Test.proc188.1.vts";
     int DataLine = 7;
 
     FILE * fp = fopen(TestDataFile,"r");
@@ -144,8 +144,6 @@ int TestCompress()
     }
     return 0;
 }
-
-
 
 int TestBase64()
 {
