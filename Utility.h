@@ -31,19 +31,22 @@ typedef struct
 {
     VTSDATAFLOAT n[VTSDIM];
     VTSDATAFLOAT d;
+    char Name[MaxNameLen];
 
     unsigned long shape[VTSDIM-1];
     unsigned long NoC;
     unsigned long Id;
-    char Name[MaxNameLen];
+
     VTSDATAFLOAT nX[VTSDIM-1][VTSDIM];
     VTSDATAFLOAT X0[VTSDIM];
     VTSDATAFLOAT * CL[VTSDIM-1];
-    VTSDATAFLOAT ** data;
+    VTSDATAFLOAT *** data;
     int ** mask;
     unsigned long nCL[VTSDIM-1];
 
     unsigned long * scores;
+    int *** offset;
+    VTSDATAFLOAT *** weight;
 } Plane;
 
 void LoadInpInfo(SALEcData *,const char*);
@@ -57,8 +60,42 @@ void IndexSearchV(SALEcData *,VTSDATAFLOAT const *,int*);
 int GetBlockIndexC(SALEcData *, const int *);
 int GetBlockIndexV(SALEcData *, const int *);
 int BlockSearch(SALEcData * _sdata,VTSDATAFLOAT * _x);
-#define vdot3(a,b) (a[0]*b[0] + a[1]*b[1] + a[2]*b[2])
-#define vzero(a) a[0] = a[1] = a[2] = 0.
-void SetPlaneMeshV(SALEcData * _sdata, Plane * _out);
-void SetPlaneMask(SALEcData * _sdata, Plane * _out);
+int OffsetSerchC(VtsInfo * _vsf, VTSDATAFLOAT * _x, int * _indices,VTSDATAFLOAT *);
+int OffsetSerchV(VtsInfo * _vsf, VTSDATAFLOAT * _x, int * _indices,VTSDATAFLOAT *);
+
+void SetPlaneMask(SALEcData * _sdata, Plane * _out,int (*_search)(VtsInfo *, VTSDATAFLOAT *, int *,VTSDATAFLOAT*));
+#define SetPlaneMaskV(_sdata,_out) SetPlaneMask(_sdata,_out,OffsetSerchV)
+#define SetPlaneMaskC(_sdata,_out) SetPlaneMask(_sdata,_out,OffsetSerchC)
+
+void SetMeshCLV(SALEcData * _sdata,Plane * _out,unsigned int px,unsigned int py);
+void SetMeshCLC(SALEcData * _sdata,Plane * _out,unsigned int px,unsigned int py);
+void SetPlaneMesh(SALEcData * _sdata, Plane * _out, void (*_set)(SALEcData * ,Plane * ,unsigned int ,unsigned int));
+#define SetPlaneMeshV(_sdata,_out) SetPlaneMesh(_sdata,_out,SetMeshCLV)
+#define SetPlaneMeshC(_sdata,_out) SetPlaneMesh(_sdata,_out,SetMeshCLC)
+
+void GetPlaneDataC(SALEcData * _sdata, Plane * _out);
+void WritePlaneData(Plane * _out,int compoent,const char * fname);
+
+#define v_liner_op(x,pa,a,pb,b) do \
+    {                              \
+        for(int _vk=0;_vk<3;_vk++) (x)[_vk] = (pa)*(a)[_vk] + (pb)*(b)[_vk];\
+    } while(0);
+#define v_copy(x,a) do \
+    {\
+        for(int _vk=0;_vk<3;_vk++) (x)[_vk] = (a)[_vk];\
+    }while(0);
+#define v_add_liner(x,pa,a,pb,b) do \
+    {                              \
+        for(int _vk=0;_vk<3;_vk++) (x)[_vk] += (pa)*(a)[_vk] + (pb)*(b)[_vk];\
+    } while(0);
+#define vdot3(a,b) ((a)[0]*(b)[0] + (a)[1]*(b)[1] + (a)[2]*(b)[2])
+#define vzero(a) (a)[0] = (a)[1] = (a)[2] = 0.
+#define lerp(_l,_r,_t) ((_l)*(1.-_t) + (_r)*(_t))
+#define vlerp(_x,_n,_l,_r,_t) do{\
+    for(int _iv=0;_iv<(_n);_iv++)\
+    {                        \
+        (_x)[_iv] = lerp((_l)[_iv],(_r)[_iv],(_t));\
+    }}while(0);
+#define _lId3(x,y,z,nx,ny,nz) ((x)+(nx)*((y)+(ny)*(z)))
+#define _lId2(x,y,nx,ny) ((x)+(nx)*(y))
 #endif //SALECVTSREADER_UTILITY_H

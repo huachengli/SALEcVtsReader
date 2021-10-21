@@ -26,11 +26,15 @@ int main()
 
     vzero(Out.X0);
     vzero(Out.n);
-    Out.n[1] = 1.;
+    Out.n[2] = 1.;
     Out.d = 0.;
 
     SetPlaneMeshV(&SaleData,&Out);
-    SetPlaneMask(&SaleData,&Out);
+    SetPlaneMaskV(&SaleData,&Out);
+
+    strcpy(Out.Name,"Density");
+    GetPlaneDataC(&SaleData,&Out);
+    WritePlaneData(&Out,0,"Planetmp.txt");
     return 0;
 
 }

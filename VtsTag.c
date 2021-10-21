@@ -176,6 +176,7 @@ void TagDataArrayBeginFunc(const char* _values,VtsInfo * _vfp)
     }
 
     _vfp->ActiveVtsData = _vdp;
+    _vdp->NoC = 1; // set the default values for compoent;
 
     unsigned int r = 0;
     unsigned int dr = 0;

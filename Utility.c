@@ -160,7 +160,32 @@ SETGetBlockIndex(V)
 SETGetBlockIndex(C)
 
 
-void SetPlaneMeshV(SALEcData * _sdata, Plane * _out)
+
+void SetMeshCLV(SALEcData * _sdata,Plane * _out,unsigned int px,unsigned py)
+{
+    _out->shape[0] = _sdata->nGCLV[px];
+    _out->shape[1] = _sdata->nGCLV[py];
+
+    _out->CL[0] = _sdata->GCLV[px];
+    _out->CL[1] = _sdata->GCLV[py];
+
+    _out->nCL[0] = _sdata->nGCLV[px];
+    _out->nCL[1] = _sdata->nGCLV[py];
+}
+
+void SetMeshCLC(SALEcData * _sdata,Plane * _out,unsigned int px,unsigned py)
+{
+    _out->shape[0] = _sdata->nGCLC[px];
+    _out->shape[1] = _sdata->nGCLC[py];
+
+    _out->CL[0] = _sdata->GCLC[px];
+    _out->CL[1] = _sdata->GCLC[py];
+
+    _out->nCL[0] = _sdata->nGCLC[px];
+    _out->nCL[1] = _sdata->nGCLC[py];
+}
+
+void SetPlaneMesh(SALEcData * _sdata, Plane * _out, void (*_set)(SALEcData * ,Plane * ,unsigned int ,unsigned int))
 {
     // before this function Plane.n and Plane.d is known
     VTSDATAFLOAT nx,ny,nz;
@@ -214,6 +239,7 @@ void SetPlaneMeshV(SALEcData * _sdata, Plane * _out)
     _out->nX[0][pz] += - nx/nz;
     _out->nX[1][pz] += - ny/nz;
 
+    /*
     _out->shape[0] = _sdata->nGCLV[px];
     _out->shape[1] = _sdata->nGCLV[py];
 
@@ -222,6 +248,8 @@ void SetPlaneMeshV(SALEcData * _sdata, Plane * _out)
 
     _out->nCL[0] = _sdata->nGCLV[px];
     _out->nCL[1] = _sdata->nGCLV[py];
+     */
+    _set(_sdata,_out,px,py);
 
 }
 
@@ -237,36 +265,58 @@ int BlockSearch(SALEcData * _sdata,VTSDATAFLOAT * _x)
     return _indices[0] + _sdata->Npgx[0]*(_indices[1] + _sdata->Npgx[1]*_indices[2]);
 }
 
-int OffsetSerch(VtsInfo * _vsf, VTSDATAFLOAT * _x)
+int OffsetSerchV(VtsInfo * _vsf, VTSDATAFLOAT * _x, int * _indices, VTSDATAFLOAT * _weight)
 {
-    int _indices[VTSDIM];
     for(int k=0;k<VTSDIM;++k)
     {
         _indices[k] = cbsearch(_vsf->CLV[k],_x[k],_vsf->Nxp[k]);
-        if(_indices[k] < 0) return -1;
+        if(_indices[k] < 0)
+        {
+            fprintf(stdout,"out of index in offset search.\n");
+            exit(0);
+            return -1;
+        }
+        _weight[k] = (_x[k]-_vsf->CLV[k][_indices[k]])/(_vsf->CLV[k][_indices[k]+1]-_vsf->CLV[k][_indices[k]]);
     }
+    _indices[VTSDIM] = _indices[0] + _vsf->Nxp[0]*(_indices[1] + _vsf->Nxp[1]*_indices[2]);
+
     return _indices[0] + _vsf->Nxp[0]*(_indices[1] + _vsf->Nxp[1]*_indices[2]);
 }
 
-#define v_liner_op(x,pa,a,pb,b) do \
-    {                              \
-        for(int _vk=0;_vk<3;_vk++) (x)[_vk] = (pa)*(a)[_vk] + (pb)*(b)[_vk];\
-    } while(0);
-#define v_copy(x,a) do \
-    {\
-        for(int _vk=0;_vk<3;_vk++) (x)[_vk] = (a)[_vk];\
-    }while(0);
-#define v_add_liner(x,pa,a,pb,b) do \
-    {                              \
-        for(int _vk=0;_vk<3;_vk++) (x)[_vk] += (pa)*(a)[_vk] + (pb)*(b)[_vk];\
-    } while(0);
+int OffsetSerchC(VtsInfo * _vsf, VTSDATAFLOAT * _x, int * _indices, VTSDATAFLOAT * _weight)
+{
+    for(int k=0;k<VTSDIM;++k)
+    {
+        _indices[k] = cbsearch(_vsf->CLC[k],_x[k],_vsf->Nxp[k]-1);
+        if(_indices[k] < 0)
+        {
+            fprintf(stdout,"out of index in offset search.\n");
+            exit(0);
+            return -1;
+        }
+        _weight[k] = (_x[k]-_vsf->CLC[k][_indices[k]])/(_vsf->CLC[k][_indices[k]+1]-_vsf->CLC[k][_indices[k]]);
+    }
+    _indices[VTSDIM] = _indices[0] + (_vsf->Nxp[0]-1)*(_indices[1] + (_vsf->Nxp[1]-1)*_indices[2]);
 
-void SetPlaneMask(SALEcData * _sdata, Plane * _out)
+    return _indices[0] + (_vsf->Nxp[0]-1)*(_indices[1] + (_vsf->Nxp[1]-1)*_indices[2]);
+}
+
+
+void SetPlaneMask(SALEcData * _sdata, Plane * _out,int (*_search)(VtsInfo *, VTSDATAFLOAT *, int *,VTSDATAFLOAT*))
 {
     _out->mask = (int **) malloc(sizeof(int*)*_out->nCL[0]);
+    _out->offset = (int ***) malloc(sizeof(int**)*_out->nCL[0]);
+    _out->weight = (VTSDATAFLOAT ***) malloc(sizeof(VTSDATAFLOAT**)*_out->nCL[0]);
     for(int k=0;k<_out->nCL[0];++k)
     {
         _out->mask[k] = (int*) malloc(sizeof(int)*_out->nCL[1]);
+        _out->offset[k] = (int **) malloc(sizeof(int*)*_out->nCL[1]);
+        _out->weight[k] = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*)*_out->nCL[1]);
+        for(int j=0;j<_out->nCL[1];++j)
+        {
+            _out->offset[k][j] = (int *) malloc(sizeof(int)*(VTSDIM+1));
+            _out->weight[k][j] = (VTSDATAFLOAT *) malloc(sizeof(VTSDATAFLOAT)*(VTSDIM));
+        }
     }
 
     _out->scores = (unsigned long *) malloc(sizeof(unsigned long)*_sdata->VtsBlockNum);
@@ -281,7 +331,11 @@ void SetPlaneMask(SALEcData * _sdata, Plane * _out)
             v_add_liner(ptmp,_out->CL[0][ix]-_out->CL[0][0],_out->nX[0],_out->CL[1][jy]-_out->CL[1][0],_out->nX[1]);
 
             _out->mask[ix][jy] = BlockSearch(_sdata,ptmp);
-            if(_out->mask[ix][jy]>=0) _out->scores[_out->mask[ix][jy]]++;
+            if(_out->mask[ix][jy]>=0)
+            {
+                _out->scores[_out->mask[ix][jy]]++;
+                _search(_sdata->VSF+_out->mask[ix][jy],ptmp,_out->offset[ix][jy],_out->weight[ix][jy]);
+            }
         }
     }
 
@@ -291,6 +345,115 @@ void SetPlaneMask(SALEcData * _sdata, Plane * _out)
         fprintf(stdout,"%5ld,",_out->scores[k]);
         if(k%12==11) fprintf(stdout,"\n");
     }
+}
+
+void GetPlaneDataC(SALEcData * _sdata, Plane * _out)
+{
+    VtsInfo * _vsf = _sdata->VSF;
+    _out->Id = 100;
+    for(int k=0;k<_vsf->CellNoF;++k)
+    {
+        if(0== strcasecmp(_out->Name,_vsf->CellField[k].Name))
+        {
+            _out->Id = k;
+            break;
+        }
+    }
+    if(_out->Id==100)
+    {
+        fprintf(stdout,"cannot find %s in cellfield\n",_out->Name);
+        exit(0);
+    }
+
+    _out->NoC = _vsf->CellField[_out->Id].NoC;
+
+    _out->data = (VTSDATAFLOAT ***) malloc(sizeof(VTSDATAFLOAT**)*_out->nCL[0]);
+    for(unsigned long ix=0;ix<_out->nCL[0];ix++)
+    {
+        _out->data[ix] = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*)*_out->nCL[1]);
+        for(unsigned long jy=0;jy<_out->nCL[1];jy++)
+        {
+            _out->data[ix][jy] = (VTSDATAFLOAT*) malloc(sizeof(VTSDATAFLOAT)*(_out->NoC));
+        }
+    }
+
+    for(unsigned long ix=0;ix<_out->nCL[0];ix++)
+    {
+        for(unsigned long jy=0;jy<_out->nCL[1];jy++)
+        {
+            if(_out->mask[ix][jy]<0)
+            {
+                continue;
+            }
+            VTSDATAFLOAT * tfield = _vsf[_out->mask[ix][jy]].CellField[_out->Id].Data;
+            unsigned long tnx = _vsf[_out->mask[ix][jy]].Nxp[0]-1;
+            unsigned long tny = _vsf[_out->mask[ix][jy]].Nxp[1]-1;
+            unsigned long tnz = _vsf[_out->mask[ix][jy]].Nxp[2]-1;
+            unsigned long tx  = _out->offset[ix][jy][0];
+            unsigned long ty  = _out->offset[ix][jy][1];
+            unsigned long tz  = _out->offset[ix][jy][2];
+
+            // Apply nearest interpolation in some condition
+            for(int kd=0;kd<VTSDIM;kd++)
+            {
+                if(_out->offset[ix][jy][kd] < _sdata->Noffset)
+                {
+                    _out->weight[ix][jy][kd] = 1.0;
+                } else if(_out->offset[ix][jy][kd] >= _vsf[_out->mask[ix][jy]].Nxp[kd] - _sdata->Noffset-2)
+                {
+                    _out->weight[ix][jy][kd]=0.0;
+                }
+            }
+
+
+            unsigned long taId[2][2][2];
+            for(int ia=0;ia<2;ia++)
+            {
+                for(int ja = 0; ja < 2; ++ja)
+                {
+                    for(int ka=0;ka<2;ka++)
+                        taId[ia][ja][ka] = _lId3(tx+ia,ty+ja,tz+ka,tnx,tny,tnz);
+                }
+            }
+
+            for(int kc=0;kc<_out->NoC;kc++)
+            {
+                VTSDATAFLOAT ta[2][2];
+                VTSDATAFLOAT tb[2];
+                for(int ia=0;ia<2;ia++)
+                {
+                    for(int ja = 0; ja < 2; ++ja)
+                    {
+                        ta[ia][ja] = lerp(tfield[_lId2(kc,taId[ia][ja][0],_out->NoC,1)],
+                                          tfield[_lId2(kc,taId[ia][ja][1],_out->NoC,1)],
+                                          _out->weight[ix][jy][2]);
+                    }
+                    tb[ia] = lerp(ta[ia][0],ta[ia][1],_out->weight[ix][jy][1]);
+                }
+                _out->data[ix][jy][kc] = lerp(tb[0],tb[1],_out->weight[ix][jy][0]);
+            }
+        }
+    }
+}
+
+void WritePlaneData(Plane * _out,int compoent,const char * fname)
+{
+    FILE * fp = fopen(fname,"w");
+    for(int i=0;i<_out->nCL[0];i++)
+    {
+        for(int j=0;j<_out->nCL[1];j++)
+        {
+            fprintf(fp,"%10.6f,",_out->data[i][j][compoent]);
+        }
+        fprintf(fp,"\n");
+    }
+    fclose(fp);
+}
+
+void MergeBlockC(SALEcData * _sdata,int * indices)
+{
+    // ... alternative method for nearest interpolation in some condition
+    // in GetPlaneDataC
 }
 
 
