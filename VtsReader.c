@@ -67,7 +67,6 @@ int Base64Decode(unsigned char * _code, unsigned int _clen, unsigned char * _str
         _slen = _clen/4*3;
     }
 
-//    _str = (unsigned char *) malloc((_slen+1)*sizeof(unsigned char));
     _str[_slen] = '\0';
 
     int i = 0;
@@ -258,7 +257,8 @@ void ReadVtsBinaryF32(float ** _data,unsigned long * _dlen,FILE * fp)
     BodyB64 = (unsigned char*) malloc(sizeof(unsigned char)*BodyB64Len);
     fread(BodyB64, sizeof(unsigned char),BodyB64Len,fp);
 
-    BodyComp = (unsigned char*) malloc(sizeof(unsigned char)*BodyCompLen);
+    BodyComp = (unsigned char*) malloc(sizeof(unsigned char)*(BodyCompLen+4));
+    // Base64Decode will write the last byte, then BodyComp is 1 byte longer than the data.
     Base64Decode(BodyB64,BodyB64Len,BodyComp);
     free(BodyB64);
 
@@ -439,32 +439,50 @@ VTSDATAFLOAT * VtsGetPoint(VtsInfo * _vsf,unsigned long _i, unsigned long _j, un
 
 void VtsSetCoordLine(VtsInfo * _vsf)
 {
-    _vsf->CoordLine = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*)*VTSDIM);
+    /*_vsf->CLV = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*) * VTSDIM);
+    _vsf->CLC = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*) * VTSDIM);*/
     for(int k=0;k<VTSDIM;++k)
     {
-        _vsf->CoordLine[k] = (VTSDATAFLOAT *) malloc(sizeof(VTSDATAFLOAT)*_vsf->Nxp[k]);
+        _vsf->CLV[k] = (VTSDATAFLOAT *) malloc(sizeof(VTSDATAFLOAT) * _vsf->Nxp[k]);
+        _vsf->CLC[k] = (VTSDATAFLOAT *) malloc(sizeof(VTSDATAFLOAT) * (_vsf->Nxp[k]-1));
     }
 
-    // Set X CoordLine
+#define P_XARGS_0 0,0,xi
+#define P_XARGS_1 0,xi,0
+#define P_XARGS_2 xi,0,0
+#define SETCLV(dim) for(unsigned long xi=0;xi<_vsf->Nxp[dim];++xi) \
+    {\
+        _vsf->CLV[dim][xi] = VtsGetPoint(_vsf, P_XARGS_##dim)[dim]; \
+    }
+#define SETCLC(dim) for(unsigned long xi=0;xi<_vsf->Nxp[dim]-1;++xi) \
+    {                                                              \
+        _vsf->CLC[dim][xi] = 0.5*(_vsf->CLV[dim][xi]+_vsf->CLV[dim][xi+1]);\
+    }
+#define SETCL_VC(dim) SETCLV(dim) SETCLC(dim)
+    SETCL_VC(0);
+    SETCL_VC(1);
+    SETCL_VC(2);
+
+  /*  // Set X CLV
     for(unsigned long xi=0;xi<_vsf->Nxp[0];++xi)
     {
-        _vsf->CoordLine[0][xi] = VtsGetPoint(_vsf,0,0,xi)[0];
+        _vsf->CLV[0][xi] = VtsGetPoint(_vsf, 0, 0, xi)[0];
     }
-    // Set Y CoordLine
+    // Set Y CLV
     for(unsigned long xi=0;xi<_vsf->Nxp[1];++xi)
     {
-        _vsf->CoordLine[1][xi] = VtsGetPoint(_vsf,0,xi,0)[1];
+        _vsf->CLV[1][xi] = VtsGetPoint(_vsf, 0, xi, 0)[1];
     }
-    // Set Z CoordLine
+    // Set Z CLV
     for(unsigned long xi=0;xi<_vsf->Nxp[2];++xi)
     {
-        _vsf->CoordLine[2][xi] = VtsGetPoint(_vsf,xi,0,0)[2];
-    }
+        _vsf->CLV[2][xi] = VtsGetPoint(_vsf, xi, 0, 0)[2];
+    }*/
 
-    for(int k=0;k<_vsf->Nxp[0];++k)
+   /* for(int k=0;k<_vsf->Nxp[0];++k)
     {
-        fprintf(stdout,"%10.5f,",_vsf->CoordLine[0][k]);
+        fprintf(stdout,"%10.5f,",_vsf->CLV[0][k]);
         if(k%10==9) fprintf(stdout,"\n");
-    }
+    }*/
 }
 

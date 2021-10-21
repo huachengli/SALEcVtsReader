@@ -55,7 +55,8 @@ typedef struct
     unsigned long Nxp[VTSDIM];
     VTSDATAFLOAT **** Point;
     VTSDATAFLOAT **** Cell;
-    VTSDATAFLOAT ** CoordLine;
+    VTSDATAFLOAT * CLV[VTSDIM];
+    VTSDATAFLOAT * CLC[VTSDIM];
 
     unsigned int CellNoF; /*NumberOfField*/
     VtsData * CellField;

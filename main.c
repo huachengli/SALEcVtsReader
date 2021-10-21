@@ -1,9 +1,195 @@
 #include <stdio.h>
-#include "VtsReader.h"
+#include "Utility.h"
+
+#define print_vec(x,nx,t) do{\
+    fprintf(stdout,"\n###START###\n");   \
+    for(int _vk=0;_vk<(nx);_vk++) \
+    {\
+        fprintf(stdout,"%10.6f,",(x)[_vk]);\
+        if(k%(t)==(t-1)) fprintf(stdout,"\n");\
+    }                                            \
+    fprintf(stdout,"\n###END###\n");     \
+    }while(0);
 
 int main()
 {
-    const char TestDataFile[] = "/home/huacheng/Documents/Github/data/pdata/Al1100Test.proc188.1.vts";
+    const char TestInpFilePath[] = "/home/huacheng/Documents/Github/data/pdata/SALEc_20.inp";
+    const char TestDataPrefix[] = "/home/huacheng/Documents/Github/data/pdata/Al1100Test.proc%d.1.vts";
+    Plane Out;
+    SALEcData SaleData;
+    LoadInpInfo(&SaleData,TestInpFilePath);
+    LoadVtsData(&SaleData,TestDataPrefix);
+
+    for(int k=0;k<3;++k)
+        print_vec(SaleData.BCLV[k],SaleData.nBCLV[k],6);
+//    print_vec(SaleData.GCLV[1],SaleData.nGCLV[1],15);
+
+    vzero(Out.X0);
+    vzero(Out.n);
+    Out.n[1] = 1.;
+    Out.d = 0.;
+
+    SetPlaneMeshV(&SaleData,&Out);
+    SetPlaneMask(&SaleData,&Out);
+    return 0;
+
+}
+
+
+
+int TestSALEcData()
+{
+    const char TestInpFilePath[] = "/home/huacheng/Documents/Github/data/pdata/SALEc_20.inp";
+    const char TestDataPrefix[] = "/home/huacheng/Documents/Github/data/pdata/Al1100Test.proc%d.1.vts";
+    SALEcData SaleData;
+    LoadInpInfo(&SaleData,TestInpFilePath);
+    LoadVtsData(&SaleData,TestDataPrefix);
+    WriteGCL(&SaleData,2,stdout);
+    CleanSALEcData(&SaleData);
+    return 1;
+}
+
+
+
+int TestUtility()
+{
+    const char TestInpFilePath[] = "/home/huacheng/Documents/Github/data/pdata/SALEc_20.inp";
+    InputFile * ifp = OpenInputFile(TestInpFilePath);
+
+    int Npgx[VTSDIM],Noffset,Npx[VTSDIM];
+    Npgx[0] = GetValueI(ifp,"processor.npgx","8");
+    Npgx[1] = GetValueI(ifp,"processor.npgy","8");
+    Npgx[2] = GetValueI(ifp,"processor.npgz","8");
+    Noffset = GetValueI(ifp,"processor.noffset","8");
+    Npx[0] = GetValueI(ifp,"mesh.npx","32");
+    Npx[1] = GetValueI(ifp,"mesh.npy","32");
+    Npx[2] = GetValueI(ifp,"mesh.npz","32");
+    CloseInputFile(ifp);
+    unsigned VtsBlockNum = Npgx[0]*Npgx[1]*Npgx[2];
+    VtsInfo * VSF = malloc(sizeof(VtsInfo)*VtsBlockNum);
+
+    const char TestDataPrefix[] = "/home/huacheng/Documents/Github/data/pdata/Al1100Test.proc%d.1.vts";
+    unsigned int TaskFinished = 0;
+#pragma omp parallel for num_threads(12) default(shared)
+    for(int k=0;k<VtsBlockNum;k++)
+    {
+        char VtsFileName[200];
+        sprintf(VtsFileName,TestDataPrefix,k);
+        FILE *fp = fopen(VtsFileName,"r");
+        if(NULL==fp)
+        {
+            fprintf(stdout,"cannot open %s\n",VtsFileName);
+            exit(0);
+        }
+        VtsLoad(VSF+k,fp);
+        fclose(fp);
+
+#pragma omp critical
+        {
+            TaskFinished ++;
+            if(TaskFinished%10==9)
+            {
+                fprintf(stdout,"#");
+                fflush(stdout);
+            }
+        };
+    }
+
+    VTSDATAFLOAT ** GCL; // global coordinate line
+    GCL = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*)*VTSDIM);
+    for(int k=0;k<VTSDIM;++k)
+    {
+        GCL[k] = (VTSDATAFLOAT*) malloc(sizeof(VTSDATAFLOAT)*(Npgx[k]*Npx[k]+1));
+    }
+
+    // Set GCL X-direction
+    for(int k=0;k<Npgx[0];++k)
+    {
+        memcpy(GCL[0]+k*Npx[0], VSF[k].CLV[0] + Noffset, sizeof(VTSDATAFLOAT) * (Npx[0] + 1));
+    }
+    // Set GCL Y-direction
+    for(int k=0;k<Npgx[1];++k)
+    {
+        memcpy(GCL[1]+k*Npx[1], VSF[k*Npgx[0]].CLV[1] + Noffset, sizeof(VTSDATAFLOAT) * (Npx[1] + 1));
+    }
+    // Set GCL Z-direction
+    for(int k=0;k<Npgx[2];++k)
+    {
+        memcpy(GCL[2]+k*Npx[2], VSF[k*Npgx[0]*Npgx[1]].CLV[2] + Noffset, sizeof(VTSDATAFLOAT) * (Npx[2] + 1));
+    }
+
+    FILE *fp = fopen("GCLtmp.csv","w");
+    if(NULL==fp)
+    {
+        fprintf(stdout,"cannot open GCLtmp file!\n");
+        exit(0);
+    }
+
+    for(int k=0;k<(Npx[2]*Npgx[2]+1);++k)
+    {
+        fprintf(fp,"%10.6f,",GCL[2][k]);
+        fprintf(stdout,"%10.6f,",GCL[2][k]);
+        if(k%15==14)
+        {
+            fprintf(stdout,"\n");
+//            fprintf(fp,"\n");
+        }
+
+    }
+    fclose(fp);
+
+    for(int k=0;k<VTSDIM;++k)
+        free(GCL[k]);
+    free(GCL);
+
+
+    for(int k=0;k<VtsBlockNum;++k)
+    {
+        VtsInfoClean(VSF+k);
+    }
+    free(VSF);
+    return 1;
+}
+
+
+int TestOmpVtsLoad()
+{
+    const char TestDataPrefix[] = "/home/huacheng/Documents/Github/data/pdata/Al1100Test.proc%d.1.vts";
+    VtsInfo VSF[288];
+    int TaskFinished = 0;
+#pragma omp parallel for num_threads(6) shared(TaskFinished,TestDataPrefix,stdout,VSF) default(none)
+    for(int k=0;k<288;k++)
+    {
+        char VtsFileName[200];
+        sprintf(VtsFileName,TestDataPrefix,k);
+        FILE *fp = fopen(VtsFileName,"r");
+        VtsLoad(VSF+k,fp);
+        fclose(fp);
+
+#pragma omp critical
+        {
+            TaskFinished ++;
+            if(TaskFinished%10==9)
+            {
+                fprintf(stdout,"#");
+                fflush(stdout);
+            }
+        };
+
+    }
+
+    for(int k=0;k<288;k++)
+    {
+        VtsInfoClean(VSF+k);
+    }
+    return 1;
+}
+
+
+int TestLoadVts()
+{
+    const char TestDataFile[] = "/home/huacheng/Documents/Github/data/pdata/Al1100Test.proc189.1.vts";
+
     FILE * fp = fopen(TestDataFile,"r");
     if(NULL==fp)
     {
@@ -12,6 +198,7 @@ int main()
     }
 
     VtsInfo VSF;
+
     VtsLoad(&VSF,fp);
 
     fprintf(stdout,"\n");

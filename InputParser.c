@@ -87,7 +87,7 @@ int Strok(const char _str[],const char _delim[], char value[])
 
 int ReadLineTrim(unsigned char _buffer[],FILE *fp)
 {
-    fscanf(fp,"%[^\n]",_buffer);
+    (void )fscanf(fp,"%[^\n]",_buffer);
     fgetc(fp);
     trim(_buffer);
     return strlen(_buffer);
