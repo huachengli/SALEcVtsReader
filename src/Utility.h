@@ -47,6 +47,7 @@ typedef struct
     unsigned long * scores;
     int *** offset;
     VTSDATAFLOAT *** weight;
+    VTSDATAFLOAT *** coord;
 } Plane;
 
 void LoadInpInfo(SALEcData *,const char*);
@@ -75,7 +76,13 @@ void SetPlaneMesh(SALEcData * _sdata, Plane * _out, void (*_set)(SALEcData * ,Pl
 
 void GetPlaneDataC(SALEcData * _sdata, Plane * _out);
 void WritePlaneData(Plane * _out,int compoent,const char * fname);
+void WritePlaneCoord(Plane * _out, const char * fname);
+void CleanPlane(Plane * _out);
 
+#define v_normalize(x) do {\
+    VTSDATAFLOAT tmp = sqrt((x)[0]*(x)[0] + (x)[1]*(x)[1] + (x)[2]*(x)[2]); \
+    (x)[0] /= tmp;(x)[1] /= tmp;(x)[2] /= tmp;                 \
+    }while(0);
 #define v_liner_op(x,pa,a,pb,b) do \
     {                              \
         for(int _vk=0;_vk<3;_vk++) (x)[_vk] = (pa)*(a)[_vk] + (pb)*(b)[_vk];\
@@ -98,4 +105,14 @@ void WritePlaneData(Plane * _out,int compoent,const char * fname);
     }}while(0);
 #define _lId3(x,y,z,nx,ny,nz) ((x)+(nx)*((y)+(ny)*(z)))
 #define _lId2(x,y,nx,ny) ((x)+(nx)*(y))
+
+#define print_vec(x,nx,t) do{\
+    fprintf(stdout,"\n###START###\n");   \
+    for(int _vk=0;_vk<(nx);_vk++) \
+    {\
+        fprintf(stdout,"%10.6f,",(x)[_vk]);\
+        if(k%(t)==(t-1)) fprintf(stdout,"\n");\
+    }                                            \
+    fprintf(stdout,"\n###END###\n");     \
+    }while(0);
 #endif //SALECVTSREADER_UTILITY_H

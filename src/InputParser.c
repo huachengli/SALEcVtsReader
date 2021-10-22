@@ -201,7 +201,7 @@ InputFile * OpenInputFile(const char fname[])
 
     char LineBuffer[300];
     char MainDelimiter[] = "= ";
-    char SubDelimiter[]  = "/#*\"";
+    char SubDelimiter[]  = "#*\"";
     char Field[MaxStrLen] = "mesh";
 
     while(fscanf(fp,"%[^\n]",LineBuffer)!=EOF)

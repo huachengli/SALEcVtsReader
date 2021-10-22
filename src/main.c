@@ -1,17 +1,78 @@
 #include <stdio.h>
 #include "Utility.h"
 
-#define print_vec(x,nx,t) do{\
-    fprintf(stdout,"\n###START###\n");   \
-    for(int _vk=0;_vk<(nx);_vk++) \
-    {\
-        fprintf(stdout,"%10.6f,",(x)[_vk]);\
-        if(k%(t)==(t-1)) fprintf(stdout,"\n");\
-    }                                            \
-    fprintf(stdout,"\n###END###\n");     \
-    }while(0);
+ int main(int argc,char * argv[])
+{
+    char get_plane[200];
+    switch (argc) {
+        case 1:
+            strcpy(get_plane,"planes.plot");
+            break;
+        case 2:
+            strcpy(get_plane,argv[1]);
+            break;
+        default:
+            fprintf(stdout,"error in command line\n");
+    }
 
-int main()
+    InputFile * ifp = OpenInputFile(get_plane);
+    char SALEcInpName[200],DataPrefix[200],DataPath[400];
+
+    GetValueS(ifp,"Plane.data",DataPrefix,"Al1100Test");
+    GetValueS(ifp,"SALEc.input",SALEcInpName,"SALEc.inp");
+
+    int MinStep = GetValueIk(ifp,"SALEc.step",0,"1");
+    int MaxStep = GetValueIk(ifp,"SALEc.step",1,"1");
+    int PlaneNum = GetValueI(ifp,"Plane.number","1");
+    double ** vn,*vd;
+    vn = (double **) malloc(sizeof(double *)*PlaneNum);
+    vd = (double *) malloc(sizeof(double)*PlaneNum);
+    for(int k=0;k<PlaneNum;++k)
+    {
+        vn[k] = (double *) malloc(sizeof(double)*VTSDIM);
+
+#define GETVNK(dim,y) vn[k][dim] = GetValueDk(ifp,"Plane.n"#y,k,"0.0");
+        GETVNK(0,x)
+        GETVNK(1,y)
+        GETVNK(2,z)
+#undef GETVNK
+    }
+
+    CloseInputFile(ifp);
+
+    sprintf(DataPath,"%s.proc%%d.1.vts",DataPrefix);
+    Plane Out;
+    SALEcData SaleData;
+
+    LoadInpInfo(&SaleData,SALEcInpName);
+
+    LoadVtsData(&SaleData,DataPath);
+
+    for(int k=0;k<PlaneNum;k++)
+    {
+        Out.d = vd[k];
+        v_copy(Out.n,vn[k]);
+
+        //
+        CleanPlane(&Out);
+    }
+
+
+
+    CleanSALEcData(&SaleData);
+
+
+
+
+    free(vd);
+    for(int k=0;k<PlaneNum;k++) free(vn[k]);
+    free(vn);
+    return 0;
+}
+
+
+
+int TestPlane()
 {
     const char TestInpFilePath[] = "/home/huacheng/Documents/Github/data/pdata/SALEc_20.inp";
     const char TestDataPrefix[] = "/home/huacheng/Documents/Github/data/pdata/Al1100Test.proc%d.1.vts";
@@ -22,11 +83,12 @@ int main()
 
     for(int k=0;k<3;++k)
         print_vec(SaleData.BCLV[k],SaleData.nBCLV[k],6);
-//    print_vec(SaleData.GCLV[1],SaleData.nGCLV[1],15);
 
     vzero(Out.X0);
-    vzero(Out.n);
-    Out.n[2] = 1.;
+
+    Out.n[0] = 0.;
+    Out.n[1] = 1.;
+    Out.n[2] = 0.;
     Out.d = 0.;
 
     SetPlaneMeshV(&SaleData,&Out);
@@ -35,10 +97,11 @@ int main()
     strcpy(Out.Name,"Density");
     GetPlaneDataC(&SaleData,&Out);
     WritePlaneData(&Out,0,"Planetmp.txt");
+    WritePlaneCoord(&Out,"Planemask.txt");
+    CleanSALEcData(&SaleData);
+    CleanPlane(&Out);
     return 0;
-
 }
-
 
 
 int TestSALEcData()

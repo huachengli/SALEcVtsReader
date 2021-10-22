@@ -18,12 +18,12 @@ void LoadInpInfo(SALEcData * _sdata,const char* _inputName)
     _sdata->Noffset = GetValueI(ifp,"processor.noffset","8");
     CloseInputFile(ifp);
     _sdata->VtsBlockNum = _sdata->Npgx[0]*_sdata->Npgx[1]*_sdata->Npgx[2];
-    _sdata->VSF = malloc(sizeof(VtsInfo)*_sdata->VtsBlockNum);
 
-    /*_sdata->GCLV = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*)*VTSDIM);
-    _sdata->GCLC = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*)*VTSDIM);
-    _sdata->BCLV = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*)*VTSDIM);
-    _sdata->BCLC = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*)*VTSDIM);*/
+}
+
+void LoadVtsData(SALEcData * _sdata,const char * _vtsPrefix)
+{
+    _sdata->VSF = malloc(sizeof(VtsInfo)*_sdata->VtsBlockNum);
     for(int k=0;k<VTSDIM;++k)
     {
         _sdata->GCLV[k] = (VTSDATAFLOAT*) malloc(sizeof(VTSDATAFLOAT)*(_sdata->Npgx[k]*_sdata->Npx[k]+1));
@@ -32,12 +32,10 @@ void LoadInpInfo(SALEcData * _sdata,const char* _inputName)
         _sdata->nGCLC[k] = _sdata->Npgx[k]*_sdata->Npx[k];
 
         _sdata->BCLV[k] = (VTSDATAFLOAT*) malloc(sizeof(VTSDATAFLOAT)*(_sdata->Npgx[k]+1));
+        _sdata->BCLC[k] = NULL;
         _sdata->nBCLV[k] = _sdata->Npgx[k]+1;
     }
-}
 
-void LoadVtsData(SALEcData * _sdata,const char * _vtsPrefix)
-{
     strcpy(_sdata->VtsPrefix,_vtsPrefix);
     int TaskFinished = 0;
 #pragma omp parallel for num_threads(12) shared(_sdata,stdout,TaskFinished) default(none)
@@ -83,24 +81,6 @@ void LoadVtsData(SALEcData * _sdata,const char * _vtsPrefix)
     SETGCL(1,_sdata->Npgx[0]);
     SETGCL(2,_sdata->Npgx[0]*_sdata->Npgx[1]);
 
-}
-
-void CleanSALEcData(SALEcData * _sdata)
-{
-    for(int k=0;k<VTSDIM;++k)
-    {
-        free(_sdata->GCLV[k]);
-        free(_sdata->GCLC[k]);
-    }
-
-    free(_sdata->GCLC);
-    free(_sdata->GCLV);
-
-    for(int k=0;k<_sdata->VtsBlockNum;++k)
-    {
-        VtsInfoClean(_sdata->VSF+k);
-    }
-    free(_sdata->VSF);
 }
 
 void WriteGCL(SALEcData * _sdata,unsigned int _c,FILE *fp)
@@ -188,6 +168,7 @@ void SetMeshCLC(SALEcData * _sdata,Plane * _out,unsigned int px,unsigned py)
 void SetPlaneMesh(SALEcData * _sdata, Plane * _out, void (*_set)(SALEcData * ,Plane * ,unsigned int ,unsigned int))
 {
     // before this function Plane.n and Plane.d is known
+    v_normalize(_out->n);
     VTSDATAFLOAT nx,ny,nz;
     unsigned int px,py,pz;
     if(fabs(_out->n[2]) > fabs(_out->n[1])) {
@@ -307,15 +288,18 @@ void SetPlaneMask(SALEcData * _sdata, Plane * _out,int (*_search)(VtsInfo *, VTS
     _out->mask = (int **) malloc(sizeof(int*)*_out->nCL[0]);
     _out->offset = (int ***) malloc(sizeof(int**)*_out->nCL[0]);
     _out->weight = (VTSDATAFLOAT ***) malloc(sizeof(VTSDATAFLOAT**)*_out->nCL[0]);
+    _out->coord = (VTSDATAFLOAT ***) malloc(sizeof(VTSDATAFLOAT**)*_out->nCL[0]);
     for(int k=0;k<_out->nCL[0];++k)
     {
         _out->mask[k] = (int*) malloc(sizeof(int)*_out->nCL[1]);
         _out->offset[k] = (int **) malloc(sizeof(int*)*_out->nCL[1]);
         _out->weight[k] = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*)*_out->nCL[1]);
+        _out->coord[k] = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*)*_out->nCL[1]);
         for(int j=0;j<_out->nCL[1];++j)
         {
             _out->offset[k][j] = (int *) malloc(sizeof(int)*(VTSDIM+1));
             _out->weight[k][j] = (VTSDATAFLOAT *) malloc(sizeof(VTSDATAFLOAT)*(VTSDIM));
+            _out->coord[k][j] = (VTSDATAFLOAT *) malloc(sizeof(VTSDATAFLOAT)*(VTSDIM));
         }
     }
 
@@ -326,7 +310,8 @@ void SetPlaneMask(SALEcData * _sdata, Plane * _out,int (*_search)(VtsInfo *, VTS
     {
         for(int jy=0;jy<_out->nCL[1];jy++)
         {
-            VTSDATAFLOAT ptmp[3];
+//            VTSDATAFLOAT ptmp[3];
+            VTSDATAFLOAT * ptmp = _out->coord[ix][jy];
             v_copy(ptmp,_out->X0);
             v_add_liner(ptmp,_out->CL[0][ix]-_out->CL[0][0],_out->nX[0],_out->CL[1][jy]-_out->CL[1][0],_out->nX[1]);
 
@@ -339,12 +324,14 @@ void SetPlaneMask(SALEcData * _sdata, Plane * _out,int (*_search)(VtsInfo *, VTS
         }
     }
 
+#if MASKLONG
     fprintf(stdout,"\n");
     for(int k=0;k<_sdata->VtsBlockNum;++k)
     {
         fprintf(stdout,"%5ld,",_out->scores[k]);
         if(k%12==11) fprintf(stdout,"\n");
     }
+#endif
 }
 
 void GetPlaneDataC(SALEcData * _sdata, Plane * _out)
@@ -450,11 +437,74 @@ void WritePlaneData(Plane * _out,int compoent,const char * fname)
     fclose(fp);
 }
 
+void WritePlaneCoord(Plane * _out, const char * fname)
+{
+    FILE * fp = fopen(fname,"w");
+    if(NULL==fp)
+    {
+        fprintf(stdout,"can not open %s\n",fname);
+        exit(0);
+    }
+    fprintf(fp,"%ld,%ld,%d",_out->nCL[0],_out->nCL[1],VTSDIM);
+    for(int i=0;i<_out->nCL[0];i++)
+    {
+        for(int j=0;j<_out->nCL[1];j++)
+        {
+            fprintf(fp,"%10.6f,%10.6f,%10.6f,",_out->coord[i][j][0],_out->coord[i][j][1],_out->coord[i][j][2]);
+            fprintf(fp,"%d",_out->mask[i][j]);
+            fprintf(fp,"\n");
+        }
+    }
+    fclose(fp);
+}
+
 void MergeBlockC(SALEcData * _sdata,int * indices)
 {
     // ... alternative method for nearest interpolation in some condition
     // in GetPlaneDataC
 }
 
+#define SAFEFREE(x) if(NULL!=(x)) free(x);
+void CleanSALEcData(SALEcData * _sdata)
+{
+
+    for(int k=0;k<VTSDIM;++k)
+    {
+        SAFEFREE(_sdata->GCLV[k])
+        SAFEFREE(_sdata->GCLC[k])
+        SAFEFREE(_sdata->BCLV[k])
+        SAFEFREE(_sdata->BCLC[k])
+    }
+
+    for(int k=0;k<_sdata->VtsBlockNum;++k)
+    {
+        VtsInfoClean(_sdata->VSF+k);
+    }
+    free(_sdata->VSF);
+}
+
+void CleanPlane(Plane * _out)
+{
+    for(int k=0;k<_out->nCL[0];++k)
+    {
+
+        for(int j=0;j<_out->nCL[1];++j)
+        {
+            SAFEFREE(_out->offset[k][j])
+            SAFEFREE(_out->weight[k][j])
+            SAFEFREE(_out->coord[k][j])
+        }
+        SAFEFREE(_out->mask[k])
+        SAFEFREE(_out->offset[k])
+        SAFEFREE(_out->weight[k])
+        SAFEFREE(_out->coord[k])
+    }
+    SAFEFREE(_out->scores)
+    SAFEFREE(_out->mask)
+    SAFEFREE(_out->offset)
+    SAFEFREE(_out->weight)
+    SAFEFREE(_out->coord)
+}
+#undef SAFEFREE
 
 

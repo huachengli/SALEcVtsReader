@@ -415,6 +415,12 @@ void VtsInfoClean(VtsInfo * _vsf)
         free(_vsf->Point[xi0]);
     }
     free(_vsf->Point);
+
+    for(int k=0;k<VTSDIM;k++)
+    {
+        free(_vsf->CLV[k]);
+        free(_vsf->CLC[k]);
+    }
 }
 
 VTSDATAFLOAT * VtsGetPoint(VtsInfo * _vsf,unsigned long _i, unsigned long _j, unsigned long _k)
