@@ -76,6 +76,7 @@ void SetPlaneMesh(SALEcData * _sdata, Plane * _out, void (*_set)(SALEcData * ,Pl
 
 void GetPlaneDataC(SALEcData * _sdata, Plane * _out);
 void WritePlaneData(Plane * _out,int compoent,const char * fname);
+void WritePlaneDataAll(Plane * _out,const char * fname);
 void WritePlaneCoord(Plane * _out, const char * fname);
 void CleanPlane(Plane * _out);
 

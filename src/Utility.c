@@ -437,6 +437,25 @@ void WritePlaneData(Plane * _out,int compoent,const char * fname)
     fclose(fp);
 }
 
+void WritePlaneDataAll(Plane * _out,const char * fname)
+{
+    FILE * fp = fopen(fname,"w");
+    for(int k=0;k<_out->NoC;k++)
+    {
+        for(int i=0;i<_out->nCL[0];i++)
+        {
+            for(int j=0;j<_out->nCL[1];j++)
+            {
+                fprintf(fp,"%10.6f,",_out->data[i][j][k]);
+            }
+            fprintf(fp,"\n");
+        }
+        fprintf(fp,"\n");
+    }
+    fclose(fp);
+}
+
+
 void WritePlaneCoord(Plane * _out, const char * fname)
 {
     FILE * fp = fopen(fname,"w");
@@ -445,7 +464,7 @@ void WritePlaneCoord(Plane * _out, const char * fname)
         fprintf(stdout,"can not open %s\n",fname);
         exit(0);
     }
-    fprintf(fp,"%ld,%ld,%d",_out->nCL[0],_out->nCL[1],VTSDIM);
+    fprintf(fp,"%ld,%ld,%d\n",_out->nCL[0],_out->nCL[1],VTSDIM);
     for(int i=0;i<_out->nCL[0];i++)
     {
         for(int j=0;j<_out->nCL[1];j++)
