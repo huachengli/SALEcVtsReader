@@ -407,13 +407,14 @@ void VtsInfoClean(VtsInfo * _vsf)
     unsigned int nx1 = _vsf->PieceExtent[1][1]-_vsf->PieceExtent[1][0]+1;
     unsigned int nx2 = _vsf->PieceExtent[2][1]-_vsf->PieceExtent[2][0]+1;
 
-    for(int xi0=0;xi0<nx0;++xi0)
+
+    for(int xi2=0;xi2<nx2;++xi2)
     {
         for(int xi1=0;xi1<nx1;++xi1)
         {
-            free(_vsf->Point[xi0][xi1]);
+            free(_vsf->Point[xi2][xi1]);
         }
-        free(_vsf->Point[xi0]);
+        free(_vsf->Point[xi2]);
     }
     free(_vsf->Point);
 

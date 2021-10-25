@@ -74,6 +74,7 @@
         sprintf(DataPath,"%s.proc%%d.%d.vts",DataPrefix,CurrentStep);
 
         LoadVtsData(SaleData,DataPath);
+        fprintf(stdout,"\n");
         for(int k=0;k<PlaneNum;k++)
         {
             Out[k].d = vd[k];

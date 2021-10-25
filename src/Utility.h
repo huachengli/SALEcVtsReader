@@ -82,7 +82,7 @@ void CleanPlane(Plane * _out);
 
 VTSDATAFLOAT* VtmGetCellData(SALEcData * _sdata, unsigned long k, unsigned long _i,unsigned long _j, unsigned long _k);
 void GetProfileLim(SALEcData * _sdata, Plane * _out, VTSDATAFLOAT _tol);
-#define GetProfile(_sdata,_out) GetProfileLim(_sdata,_out,0.01)
+#define GetProfile(_sdata,_out) GetProfileLim(_sdata,_out,0.05)
 
 #define v_normalize(x) do {\
     VTSDATAFLOAT tmp = sqrt((x)[0]*(x)[0] + (x)[1]*(x)[1] + (x)[2]*(x)[2]); \
