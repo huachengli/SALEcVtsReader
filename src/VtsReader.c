@@ -374,16 +374,17 @@ int VtsCoordinateReshape(VtsInfo * _vsf)
         exit(0);
     }
 
-    _vsf->Point = (VTSDATAFLOAT ****) malloc(sizeof(VTSDATAFLOAT ***)*nx0);
-    for(int xi0=0;xi0<nx0;++xi0)
+
+    _vsf->Point = (VTSDATAFLOAT ****) malloc(sizeof(VTSDATAFLOAT ***)*nx2);
+    for(int xi2=0;xi2<nx2;++xi2)
     {
-        _vsf->Point[xi0] = (VTSDATAFLOAT ***) malloc(sizeof(VTSDATAFLOAT **)*nx1);
+        _vsf->Point[xi2] = (VTSDATAFLOAT ***) malloc(sizeof(VTSDATAFLOAT **)*nx1);
         for(int xi1=0;xi1<nx1;++xi1)
         {
-            _vsf->Point[xi0][xi1] = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT *)*nx2);
-            for(unsigned long xi2=0;xi2<nx2;++xi2)
+            _vsf->Point[xi2][xi1] = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT *)*nx0);
+            for(unsigned long xi0=0;xi0<nx0;++xi0)
             {
-                _vsf->Point[xi0][xi1][xi2] = PointData + (xi2 + xi1*nx2 + xi0*nx2*nx1)*VTSDIM;
+                _vsf->Point[xi2][xi1][xi0] = PointData + (xi0 + xi1*nx0 + xi2*nx0*nx1)*VTSDIM;
             }
         }
     }
@@ -425,7 +426,7 @@ void VtsInfoClean(VtsInfo * _vsf)
 
 VTSDATAFLOAT * VtsGetPoint(VtsInfo * _vsf,unsigned long _i, unsigned long _j, unsigned long _k)
 {
-    if((_i< 0) || (_i>=_vsf->Nxp[0]))
+    if((_i< 0) || (_i>=_vsf->Nxp[2]))
     {
         fprintf(stdout,"Point out of X-extent: [%ld,%ld,%ld]",_i,_j,_k);
         exit(0);
@@ -433,7 +434,7 @@ VTSDATAFLOAT * VtsGetPoint(VtsInfo * _vsf,unsigned long _i, unsigned long _j, un
     {
         fprintf(stdout,"Point out of Y-extent: [%ld,%ld,%ld]",_i,_j,_k);
         exit(0);
-    } else if((_k< 0) || (_k>=_vsf->Nxp[2]))
+    } else if((_k< 0) || (_k>=_vsf->Nxp[0]))
     {
         fprintf(stdout,"Point out of Z-extent: [%ld,%ld,%ld]",_i,_j,_k);
         exit(0);
@@ -442,6 +443,50 @@ VTSDATAFLOAT * VtsGetPoint(VtsInfo * _vsf,unsigned long _i, unsigned long _j, un
         return _vsf->Point[_i][_j][_k];
     }
 }
+
+VTSDATAFLOAT * VtsGetCellData(VtsInfo * _vsf,unsigned long k,unsigned long _i, unsigned long _j, unsigned long _k)
+{
+    unsigned int cdatelen = _vsf->CellField[k].NoC;
+    if((_i< 0) || (_i>=_vsf->Nxp[0]-1))
+    {
+        fprintf(stdout,"CellData out of X-extent: [%ld,%ld,%ld]",_i,_j,_k);
+        exit(0);
+    } else if((_j< 0) || (_j>=_vsf->Nxp[1]-1))
+    {
+        fprintf(stdout,"CellData out of Y-extent: [%ld,%ld,%ld]",_i,_j,_k);
+        exit(0);
+    } else if((_k< 0) || (_k>=_vsf->Nxp[2]-1))
+    {
+        fprintf(stdout,"CellData out of Z-extent: [%ld,%ld,%ld]",_i,_j,_k);
+        exit(0);
+    } else
+    {
+//        return _vsf->CellField[k].Data + (_k + (_vsf->Nxp[2]-1)*(_j + (_vsf->Nxp[1]-1)*_i))*cdatelen;
+        return _vsf->CellField[k].Data + (_i + (_vsf->Nxp[0]-1)*(_j + (_vsf->Nxp[1]-1)*_k))*cdatelen;
+    }
+}
+
+VTSDATAFLOAT * VtsGetPointData(VtsInfo * _vsf,unsigned long k,unsigned long _i, unsigned long _j, unsigned long _k)
+{
+    unsigned int pdatalen = _vsf->PointField[k].NoC;
+    if((_i< 0) || (_i>=_vsf->Nxp[0]))
+    {
+        fprintf(stdout,"PointData out of X-extent: [%ld,%ld,%ld]",_i,_j,_k);
+        exit(0);
+    } else if((_j< 0) || (_j>=_vsf->Nxp[1]))
+    {
+        fprintf(stdout,"PointData out of Y-extent: [%ld,%ld,%ld]",_i,_j,_k);
+        exit(0);
+    } else if((_k< 0) || (_k>=_vsf->Nxp[2]))
+    {
+        fprintf(stdout,"PointData out of Z-extent: [%ld,%ld,%ld]",_i,_j,_k);
+        exit(0);
+    } else
+    {
+        return _vsf->PointField[k].Data + (_k + _vsf->Nxp[2]*(_j + _vsf->Nxp[1]*_i))*pdatalen;
+    }
+}
+
 
 void VtsSetCoordLine(VtsInfo * _vsf)
 {
@@ -465,15 +510,21 @@ void VtsSetCoordLine(VtsInfo * _vsf)
         _vsf->CLC[dim][xi] = 0.5*(_vsf->CLV[dim][xi]+_vsf->CLV[dim][xi+1]);\
     }
 #define SETCL_VC(dim) SETCLV(dim) SETCLC(dim)
-    SETCL_VC(0);
+//    SETCL_VC(0);
     SETCL_VC(1);
     SETCL_VC(2);
 
-  /*  // Set X CLV
     for(unsigned long xi=0;xi<_vsf->Nxp[0];++xi)
     {
         _vsf->CLV[0][xi] = VtsGetPoint(_vsf, 0, 0, xi)[0];
     }
+    for(unsigned long xi=0;xi<_vsf->Nxp[0]-1;++xi)
+    {
+        _vsf->CLC[0][xi] = 0.5*(_vsf->CLV[0][xi]+_vsf->CLV[0][xi+1]);
+    }
+
+  /*  // Set X CLV
+
     // Set Y CLV
     for(unsigned long xi=0;xi<_vsf->Nxp[1];++xi)
     {

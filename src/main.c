@@ -78,10 +78,20 @@
         {
             Out[k].d = vd[k];
             v_copy(Out[k].n,vn[k]);
-            strcpy(Out[k].Name,PlaneName[k]);
-            SetPlaneMeshV(SaleData,Out+k);
-            SetPlaneMaskV(SaleData,Out+k);
-            GetPlaneDataC(SaleData,Out+k);
+            if(strcasecmp(PlaneName[k],"Profile")==0)
+            {
+                strcpy(Out[k].Name,"VOF-0");
+                SetPlaneMeshV(SaleData,Out+k);
+                SetPlaneMaskV(SaleData,Out+k);
+                GetProfile(SaleData,Out+k);
+            } else
+            {
+                strcpy(Out[k].Name,PlaneName[k]);
+                SetPlaneMeshV(SaleData,Out+k);
+                SetPlaneMaskV(SaleData,Out+k);
+                GetPlaneDataC(SaleData,Out+k);
+            }
+
             char PlaneOutName[400];
             sprintf(PlaneOutName,"%s.data.step.%d.%d",OutPrexfix,CurrentStep,k);
             fprintf(stdout,"==>Write %s\n",PlaneOutName);

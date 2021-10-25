@@ -61,9 +61,9 @@ void IndexSearchV(SALEcData *,VTSDATAFLOAT const *,int*);
 int GetBlockIndexC(SALEcData *, const int *);
 int GetBlockIndexV(SALEcData *, const int *);
 int BlockSearch(SALEcData * _sdata,VTSDATAFLOAT * _x);
+
 int OffsetSerchC(VtsInfo * _vsf, VTSDATAFLOAT * _x, int * _indices,VTSDATAFLOAT *);
 int OffsetSerchV(VtsInfo * _vsf, VTSDATAFLOAT * _x, int * _indices,VTSDATAFLOAT *);
-
 void SetPlaneMask(SALEcData * _sdata, Plane * _out,int (*_search)(VtsInfo *, VTSDATAFLOAT *, int *,VTSDATAFLOAT*));
 #define SetPlaneMaskV(_sdata,_out) SetPlaneMask(_sdata,_out,OffsetSerchV)
 #define SetPlaneMaskC(_sdata,_out) SetPlaneMask(_sdata,_out,OffsetSerchC)
@@ -79,6 +79,10 @@ void WritePlaneData(Plane * _out,int compoent,const char * fname);
 void WritePlaneDataAll(Plane * _out,const char * fname);
 void WritePlaneCoord(Plane * _out, const char * fname);
 void CleanPlane(Plane * _out);
+
+VTSDATAFLOAT* VtmGetCellData(SALEcData * _sdata, unsigned long k, unsigned long _i,unsigned long _j, unsigned long _k);
+void GetProfileLim(SALEcData * _sdata, Plane * _out, VTSDATAFLOAT _tol);
+#define GetProfile(_sdata,_out) GetProfileLim(_sdata,_out,0.01)
 
 #define v_normalize(x) do {\
     VTSDATAFLOAT tmp = sqrt((x)[0]*(x)[0] + (x)[1]*(x)[1] + (x)[2]*(x)[2]); \

@@ -204,6 +204,14 @@ void SetPlaneMesh(SALEcData * _sdata, Plane * _out, void (*_set)(SALEcData * ,Pl
         }
     }
 
+    if(px==1 && py==0)
+    {
+        px = 0;
+        py = 1;
+        VTSDATAFLOAT tmp = nx;
+        nx = ny;
+        ny = tmp;
+    }
 
     for(int k=0;k<3;++k)
     {
@@ -455,7 +463,6 @@ void WritePlaneDataAll(Plane * _out,const char * fname)
     fclose(fp);
 }
 
-
 void WritePlaneCoord(Plane * _out, const char * fname)
 {
     FILE * fp = fopen(fname,"w");
@@ -525,5 +532,88 @@ void CleanPlane(Plane * _out)
     SAFEFREE(_out->coord)
 }
 #undef SAFEFREE
+
+VTSDATAFLOAT* VtmGetCellData(SALEcData * _sdata, unsigned long k, unsigned long _i,unsigned long _j, unsigned long _k)
+{
+    unsigned long BlockId[VTSDIM];
+    unsigned long BlockOffset[VTSDIM];
+
+    BlockId[0] = (_i)/_sdata->Npx[0];
+    BlockOffset[0] = 2+(_i)%_sdata->Npx[0];
+
+    BlockId[1] = (_j)/_sdata->Npx[1];
+    BlockOffset[1] = 2+(_j)%_sdata->Npx[1];
+
+    BlockId[2] = (_k)/_sdata->Npx[2];
+    BlockOffset[2] = 2+(_k)%_sdata->Npx[2];
+
+//    unsigned long LId = BlockId[0] + _sdata->Npgx[0]*(BlockId[1] + _sdata->Npgx[1]*BlockId[2]);
+    unsigned long LId = BlockId[0] + _sdata->Npgx[0]*(BlockId[1] + _sdata->Npgx[1]*BlockId[2]);
+//    fprintf(stdout,"%d,%d,%d,%d\n",LId,BlockOffset[0],BlockOffset[1],BlockOffset[2]);
+    return VtsGetCellData(_sdata->VSF+LId,k,BlockOffset[0],BlockOffset[1],BlockOffset[2]);
+}
+
+void GetProfileLim(SALEcData * _sdata, Plane * _out, VTSDATAFLOAT _tol)
+{
+    /*_out->CL[0] = _sdata->GCLC[0]; _out->nCL[0] = _sdata->nGCLC[0];
+    _out->CL[1] = _sdata->GCLC[1]; _out->nCL[1] = _sdata->nGCLC[1];
+    vzero(_out->nX[0]); _out->nX[0][0] = 1.;
+    vzero(_out->nX[1]); _out->nX[1][1] = 1.;
+    vzero(_out->n); _out->n[2] = 1.;*/
+
+    VtsInfo * _vsf = _sdata->VSF;
+    _out->Id = 100;
+    for(int k=0;k<_vsf->CellNoF;++k)
+    {
+        if(0== strcasecmp(_out->Name,_vsf->CellField[k].Name))
+        {
+            _out->Id = k;
+            break;
+        }
+    }
+    if(_out->Id==100)
+    {
+        fprintf(stdout,"cannot find %s in cellfield\n",_out->Name);
+        exit(0);
+    }
+
+    _out->NoC = _sdata->VSF->CellField[_out->Id].NoC;
+
+    _out->data = (VTSDATAFLOAT ***) malloc(sizeof(VTSDATAFLOAT**)*_out->nCL[0]);
+    for(unsigned long ix=0;ix<_out->nCL[0];ix++)
+    {
+        _out->data[ix] = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*)*_out->nCL[1]);
+        for(unsigned long jy=0;jy<_out->nCL[1];jy++)
+        {
+            _out->data[ix][jy] = (VTSDATAFLOAT*) malloc(sizeof(VTSDATAFLOAT)*(_out->NoC));
+        }
+    }
+
+    unsigned long zColumn = _sdata->nGCLC[2];
+    VTSDATAFLOAT * zColData = (VTSDATAFLOAT *) malloc(sizeof(VTSDATAFLOAT)*zColumn);
+    for(unsigned long ix=0;ix<_out->nCL[0];ix++)
+    {
+        for(unsigned long jy=0;jy<_out->nCL[1];jy++)
+        {
+//            fprintf(stdout,"%d,%d,%d|",ix,jy,0);
+            zColData[0] = VtmGetCellData(_sdata,_out->Id,ix,jy,0)[0];
+            for(unsigned long kz=1;kz<zColumn;++kz)
+            {
+//                fprintf(stdout,"%d,%d,%d|",ix,jy,kz);
+                zColData[kz] = VtmGetCellData(_sdata,_out->Id,ix,jy,kz)[0];
+                if(zColData[kz]>_tol)
+                {
+                    VTSDATAFLOAT Lambda = (_tol-zColData[kz-1])/(zColData[kz] - zColData[kz-1]);
+                    if(Lambda > 1.0) Lambda = 1.0;
+                    if(Lambda < 0.0) Lambda = 0.0;
+                    _out->data[ix][jy][0] = _sdata->GCLC[2][kz]*Lambda + _sdata->GCLC[2][kz-1]*(1.-Lambda);
+                    break;
+                }
+            }
+        }
+    }
+
+    free(zColData);
+}
 
 

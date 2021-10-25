@@ -93,6 +93,8 @@ int VtsFrameLoad(VtsInfo * _vsf,FILE *fp);
 int VtsCoordinateReshape(VtsInfo * _vsf);
 void VtsInfoClean(VtsInfo * _vsf);
 VTSDATAFLOAT * VtsGetPoint(VtsInfo * _vsf,unsigned long _i, unsigned long _j, unsigned long _k);
+VTSDATAFLOAT * VtsGetCellData(VtsInfo * _vsf,unsigned long k,unsigned long _i, unsigned long _j, unsigned long _k);
+VTSDATAFLOAT * VtsGetPointData(VtsInfo * _vsf,unsigned long k,unsigned long _i, unsigned long _j, unsigned long _k);
 void VtsSetCoordLine(VtsInfo * _vsf);
 
 /*
