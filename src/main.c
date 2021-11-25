@@ -52,11 +52,11 @@
         int StepList0 = GetValueIk(ifp,"Plane.step",1,"0");
         int StepList1 = GetValueIk(ifp,"Plane.step",2,"0");
         int StepList2 = GetValueIk(ifp,"Plane.step",3,"1");
-        StepNum = (StepList1 - StepList0)/StepList2;
+        StepNum = (StepList1 - StepList0-1)/StepList2 + 1;
         StepList = (int *) malloc(sizeof(int)*StepNum);
         for(int istep=0;istep<StepNum;istep++)
         {
-            StepList[istep] = StepList0 + (StepList1 - StepList0)/StepList2 * istep;
+            StepList[istep] = StepList0 + StepList2 * istep;
         }
     }
 
@@ -272,7 +272,7 @@ int TestOmpVtsLoad()
     const char TestDataPrefix[] = "/home/huacheng/Documents/Github/data/pdata/Al1100Test.proc%d.1.vts";
     VtsInfo VSF[288];
     int TaskFinished = 0;
-#pragma omp parallel for num_threads(6) shared(TaskFinished,TestDataPrefix,stdout,VSF) default(none)
+#pragma omp parallel for num_threads(6) shared(TaskFinished,stdout,VSF)
     for(int k=0;k<288;k++)
     {
         char VtsFileName[200];
