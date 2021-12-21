@@ -16,15 +16,17 @@
     }
 
     InputFile * ifp = OpenInputFile(get_plane);
-    char SALEcInpName[200],DataPrefix[200],DataPath[400],OutPrexfix[200];
+    char SALEcInpName[200],DataPrefix[200],DataPath[400],OutPrexfix[200],VacuumName[200];
 
     GetValueS(ifp,"Plane.data",DataPrefix,"Al1100Test");
     GetValueS(ifp,"SALEc.input",SALEcInpName,"SALEc.inp");
     GetValueS(ifp,"Plane.output",OutPrexfix,"PLANE");
+    GetValueS(ifp,"Plane.Vacuum",VacuumName,"VOF-0");
 
     int MinStep = GetValueIk(ifp,"SALEc.step",0,"1");
     int MaxStep = GetValueIk(ifp,"SALEc.step",1,"1");
     int PlaneNum = GetValueI(ifp,"Plane.number","1");
+
     double ** vn,*vd;
     char ** PlaneName;
     vn = (double **) malloc(sizeof(double *)*PlaneNum);
@@ -62,8 +64,10 @@
 
     CloseInputFile(ifp);
 
-
     Plane * Out = (Plane *) malloc(PlaneNum* sizeof(Plane));
+    ProfileCache * PCache = (ProfileCache *) malloc((PlaneNum+1)* sizeof(ProfileCache));
+    for(int icache=0;icache<PlaneNum+1;++icache) PCache[icache].CacheState = 0; // set the initial cache state
+
     SALEcData * SaleData = (SALEcData *) malloc(sizeof(SALEcData));
     LoadInpInfo(SaleData,SALEcInpName);
 
@@ -82,10 +86,22 @@
             if(strcasecmp(PlaneName[k],"Profile")==0)
             {
                 strcpy(Out[k].Name,"VOF-0");
+                strcpy(Out[k].Vacuum,VacuumName);
                 SetPlaneMeshV(SaleData,Out+k);
                 SetPlaneMaskV(SaleData,Out+k);
-                GetProfile(SaleData,Out+k);
-            } else
+//                GetProfile(SaleData,Out+k);
+                GetProfileWithCache(SaleData,Out+k,PCache);
+            } else if(head__strcasestr(PlaneName[k],"Profile_") != NULL)
+            {
+                strcpy(Out[k].Name,PlaneName[k]+8);
+                strcpy(Out[k].Vacuum,VacuumName);
+
+                SetPlaneMeshV(SaleData,Out+k);
+                SetPlaneMaskV(SaleData,Out+k);
+//                GetProfileVOF(SaleData,Out+k);
+                GetProfileVOFWithCache(SaleData,Out+k,PCache);
+            }
+            else
             {
                 strcpy(Out[k].Name,PlaneName[k]);
                 SetPlaneMeshV(SaleData,Out+k);
@@ -104,6 +120,9 @@
         }
         CleanSALEcData(SaleData);
     }
+
+    CleanCache(PCache,PlaneNum+1);
+
 
     free(SaleData);
     free(Out);

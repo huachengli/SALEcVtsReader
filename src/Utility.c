@@ -68,7 +68,7 @@ void LoadVtsData(SALEcData * _sdata,const char * _vtsPrefix)
     }
 #define SETGCLC(dim) for(int k=0;k<_sdata->Npgx[dim]*_sdata->Npx[dim];++k) \
     { \
-    _sdata->GCLC[dim][k] = 0.5*(_sdata->GCLV[dim][k]+_sdata->GCLV[dim][k]); \
+    _sdata->GCLC[dim][k] = 0.5*(_sdata->GCLV[dim][k]+_sdata->GCLV[dim][k+1]); \
     }
 #define SETBCLV(dim) for(int k=0;k<_sdata->Npgx[dim]+1;++k) \
     {\
@@ -531,6 +531,28 @@ void CleanPlane(Plane * _out)
     SAFEFREE(_out->weight)
     SAFEFREE(_out->coord)
 }
+
+
+void CleanCache(ProfileCache * _cache,int _n)
+{
+    for(size_t j=0;j<_n;++j)
+    {
+        if(_cache[j].CacheState)
+        {
+            for(size_t ix=0;ix<_cache[j].nCL[0];++ix)
+            {
+                SAFEFREE(_cache[j].mask[ix])
+                SAFEFREE(_cache[j].kz[ix])
+                SAFEFREE(_cache[j].Lambda[ix])
+            }
+            SAFEFREE(_cache[j].mask)
+            SAFEFREE(_cache[j].kz)
+            SAFEFREE(_cache[j].Lambda)
+        }
+    }
+    SAFEFREE(_cache)
+}
+
 #undef SAFEFREE
 
 VTSDATAFLOAT* VtmGetCellData(SALEcData * _sdata, unsigned long k, unsigned long _i,unsigned long _j, unsigned long _k)
@@ -614,6 +636,440 @@ void GetProfileLim(SALEcData * _sdata, Plane * _out, VTSDATAFLOAT _tol)
     }
 
     free(zColData);
+}
+
+void GetProfileVOFWithCache__(SALEcData * _sdata, Plane * _out, ProfileCache * _cache, VTSDATAFLOAT _tol)
+{
+
+    // check the id of variable
+    VtsInfo * _vsf = _sdata->VSF;
+    // the max id used in vsf, 100 is much less than CellNoF
+    _out->Id = 100;
+    _out->VacuumId = 100;
+    // search id of plane name
+    _out->VacuumId = find_cellfield(_out->Vacuum,_vsf);
+    _out->Id = find_cellfield(_out->Name,_vsf);
+
+    if(_out->Id==100 || _out->VacuumId==100)
+    {
+        fprintf(stdout,"cannot find %s or %s(set as vacuum name) in cellfield\n",_out->Name,_out->Vacuum);
+        exit(0);
+    }
+
+
+    // check the Profile cache, if a cache matched, do not loop over the entire mesh
+    ProfileCache * _cur = _cache;
+    for(int icahe=0;_cache[icahe].CacheState!=0;icahe++)
+    {
+        _cur = _cache + icahe;
+#define dcmp(a,b) (fabsf((a)-(b))<1.0e-5)
+        if(_cur->VacuumId == _out->VacuumId && 0==strcasecmp(_cur->Vacuum,_out->Vacuum) &&
+                dcmp(_out->d,_cur->d) && dcmp(_out->n[0],_cur->n[0]) &&
+                dcmp(_out->n[1],_cur->n[1]) && dcmp(_out->n[2],_cur->n[2]) &&
+                dcmp(_cur->tol,_tol))
+        {
+            break;
+        }
+#undef dcmp
+    }
+
+    if(_cur->CacheState)
+    {
+        // get a cache
+        GetProfileVOFReadCache(_sdata,_out,_cur);
+    } else
+    {
+        // miss
+        GetProfileVOFWriteCache(_sdata,_out,_cur,_tol);
+    }
+}
+
+void GetProfileVOFReadCache(SALEcData * _sdata, Plane * _out,ProfileCache * _cache)
+{
+    _out->NoC = _sdata->VSF->CellField[_out->Id].NoC;
+
+    // allocate data array for output
+    _out->data = (VTSDATAFLOAT ***) malloc(sizeof(VTSDATAFLOAT**)*_out->nCL[0]);
+    for(unsigned long ix=0;ix<_out->nCL[0];ix++)
+    {
+        _out->data[ix] = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*)*_out->nCL[1]);
+        for(unsigned long jy=0;jy<_out->nCL[1];jy++)
+        {
+            _out->data[ix][jy] = (VTSDATAFLOAT*) malloc(sizeof(VTSDATAFLOAT)*(_out->NoC));
+        }
+    }
+
+    // using lambda,kz in cache
+    for(unsigned long ix=0;ix<_out->nCL[0];ix++)
+    {
+        for(unsigned long jy=0;jy<_out->nCL[1];jy++)
+        {
+
+            unsigned long kz = _cache->kz[ix][jy];
+            VTSDATAFLOAT Lambda = _cache->Lambda[ix][jy];
+            VTSDATAFLOAT * vright = VtmGetCellData(_sdata,_out->Id,ix,jy,kz);
+            VTSDATAFLOAT * vleft = VtmGetCellData(_sdata,_out->Id,ix,jy,kz-1);
+            for(unsigned long lc=0;lc<_out->NoC;++lc)
+                _out->data[ix][jy][lc] = (VTSDATAFLOAT) (1.-Lambda)*vleft[lc] + Lambda*vright[lc];
+        }
+    }
+}
+
+void GetProfileVOFWriteCache(SALEcData * _sdata, Plane * _out, ProfileCache * _cache, VTSDATAFLOAT _tol)
+{
+    /*
+     * get the variable on upper surface
+     */
+
+    VtsInfo * _vsf = _sdata->VSF;
+    _out->NoC = _sdata->VSF->CellField[_out->Id].NoC;
+
+    // allocate data array for output
+    _out->data = (VTSDATAFLOAT ***) malloc(sizeof(VTSDATAFLOAT**)*_out->nCL[0]);
+    for(unsigned long ix=0;ix<_out->nCL[0];ix++)
+    {
+        _out->data[ix] = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*)*_out->nCL[1]);
+        for(unsigned long jy=0;jy<_out->nCL[1];jy++)
+        {
+            _out->data[ix][jy] = (VTSDATAFLOAT*) malloc(sizeof(VTSDATAFLOAT)*(_out->NoC));
+        }
+    }
+    // allocate data array for cache
+    _cache->nCL[0] = _out->nCL[0];
+    _cache->nCL[1] = _out->nCL[1];
+    _cache->kz = (int **) malloc(sizeof(int*)*_out->nCL[0]);
+    _cache->Lambda = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*)*_out->nCL[0]);
+    _cache->mask = (int **) malloc(sizeof(int*)*_out->nCL[0]);
+    for(unsigned long ix=0;ix<_out->nCL[0];++ix)
+    {
+        _cache->kz[ix] = (int *) malloc(sizeof(int)*_out->nCL[1]);
+        _cache->Lambda[ix] = (VTSDATAFLOAT *) malloc(sizeof(VTSDATAFLOAT)*_out->nCL[1]);
+        _cache->mask[ix] = (int *) malloc(sizeof(int)*_out->nCL[1]);
+    }
+    // copy some information into cache
+    _cache->n[0] = _out->n[0];
+    _cache->n[1] = _out->n[1];
+    _cache->n[2] = _out->n[2];
+    _cache->d    = _out->d;
+    _cache->VacuumId = _out->VacuumId;
+    strcpy(_cache->Vacuum,_out->Vacuum);
+    _cache->tol = _tol;
+    _cache->CacheState = 1;
+
+    // search the result and write the result into cache
+    unsigned long zColumn = _sdata->nGCLC[2];
+    VTSDATAFLOAT * zColVacuum = (VTSDATAFLOAT *) malloc(sizeof(VTSDATAFLOAT)*zColumn);
+    for(unsigned long ix=0;ix<_out->nCL[0];ix++)
+    {
+        for(unsigned long jy=0;jy<_out->nCL[1];jy++)
+        {
+            zColVacuum[0] = VtmGetCellData(_sdata,_out->VacuumId,ix,jy,0)[0];
+            for(unsigned long kz=1;kz<zColumn;++kz)
+            {
+
+                zColVacuum[kz] = VtmGetCellData(_sdata,_out->VacuumId,ix,jy,kz)[0];
+
+                // write information in cache
+                _cache->mask[ix][jy] = _out->mask[ix][jy];
+                _cache->kz[ix][jy] = (int) kz;
+                if(zColVacuum[kz]>_tol)
+                {
+                    VTSDATAFLOAT Lambda = (_tol-zColVacuum[kz-1])/(zColVacuum[kz] - zColVacuum[kz-1]);
+                    if(Lambda > 1.0) Lambda = 1.0;
+                    if(Lambda < 0.0) Lambda = 0.0;
+                    _cache->Lambda[ix][jy] = Lambda;
+
+                    VTSDATAFLOAT * vright = VtmGetCellData(_sdata,_out->Id,ix,jy,kz);
+                    VTSDATAFLOAT * vleft = VtmGetCellData(_sdata,_out->Id,ix,jy,kz-1);
+                    for(unsigned long lc=0;lc<_out->NoC;++lc)
+                        _out->data[ix][jy][lc] = (VTSDATAFLOAT) (1.-Lambda)*vleft[lc] + Lambda*vright[lc];
+
+                    break;
+                }
+            }
+        }
+    }
+
+    free(zColVacuum);
+}
+
+void GetProfileVOFLim(SALEcData * _sdata, Plane * _out, VTSDATAFLOAT _tol)
+{
+    /*
+     * get the variable on upper surface
+     */
+
+    VtsInfo * _vsf = _sdata->VSF;
+
+    // the max id used in vsf, 100 is much less than CellNoF
+    _out->Id = 100;
+    _out->VacuumId = 100;
+    // search id of plane name
+    for(int k=0;k<_vsf->CellNoF;++k)
+    {
+        if(0== strcasecmp(_out->Name,_vsf->CellField[k].Name))
+        {
+            _out->Id = k;
+            break;
+        }
+    }
+    if(_out->Id==100)
+    {
+        fprintf(stdout,"cannot find %s in cellfield\n",_out->Name);
+        exit(0);
+    }
+
+
+    for(int k=0;k<_vsf->CellNoF;++k)
+    {
+        if(0== strcasecmp(_out->Vacuum,_vsf->CellField[k].Name))
+        {
+            _out->VacuumId = k;
+            break;
+        }
+    }
+    if(_out->VacuumId == 100)
+    {
+        fprintf(stdout,"cannot find %s(set as vacuum name) in cellfield",_out->Vacuum);
+    }
+
+
+    _out->NoC = _sdata->VSF->CellField[_out->Id].NoC;
+
+    // allocate data array for output
+    _out->data = (VTSDATAFLOAT ***) malloc(sizeof(VTSDATAFLOAT**)*_out->nCL[0]);
+    for(unsigned long ix=0;ix<_out->nCL[0];ix++)
+    {
+        _out->data[ix] = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*)*_out->nCL[1]);
+        for(unsigned long jy=0;jy<_out->nCL[1];jy++)
+        {
+            _out->data[ix][jy] = (VTSDATAFLOAT*) malloc(sizeof(VTSDATAFLOAT)*(_out->NoC));
+        }
+    }
+
+    unsigned long zColumn = _sdata->nGCLC[2];
+    VTSDATAFLOAT * zColData = (VTSDATAFLOAT *) malloc(sizeof(VTSDATAFLOAT)*zColumn);
+    VTSDATAFLOAT * zColVacuum = (VTSDATAFLOAT *) malloc(sizeof(VTSDATAFLOAT)*zColumn);
+    for(unsigned long ix=0;ix<_out->nCL[0];ix++)
+    {
+        for(unsigned long jy=0;jy<_out->nCL[1];jy++)
+        {
+//            fprintf(stdout,"%d,%d,%d|",ix,jy,0);
+            zColData[0]   = VtmGetCellData(_sdata,_out->Id,ix,jy,0)[0];
+            zColVacuum[0] = VtmGetCellData(_sdata,_out->VacuumId,ix,jy,0)[0];
+            for(unsigned long kz=1;kz<zColumn;++kz)
+            {
+//                fprintf(stdout,"%d,%d,%d|",ix,jy,kz);
+                zColData[kz] = VtmGetCellData(_sdata,_out->Id,ix,jy,kz)[0];
+                zColVacuum[kz] = VtmGetCellData(_sdata,_out->VacuumId,ix,jy,kz)[0];
+
+                if(zColVacuum[kz]>_tol)
+                {
+                    VTSDATAFLOAT Lambda = (_tol-zColVacuum[kz-1])/(zColVacuum[kz] - zColVacuum[kz-1]);
+                    if(Lambda > 1.0) Lambda = 1.0;
+                    if(Lambda < 0.0) Lambda = 0.0;
+                    // the position of surface can also be calculated here
+                    // just a little performance loss compared to the file io
+                    _out->data[ix][jy][0] = zColData[kz]*Lambda + zColData[kz-1]*(1.-Lambda);
+                    break;
+                }
+            }
+        }
+    }
+
+    free(zColData);
+    free(zColVacuum);
+}
+
+
+/*
+ * compare tgt and src , ignoring case
+ * if tgt is a prefix of src, return the occurrence position
+ * else return NULL
+ */
+char * head__strcasestr(const char * src, const char *tgt)
+{
+    if(NULL==src || NULL==tgt) return NULL;
+    char * s1 =  (char *) src;
+    char * s2 =  (char *) tgt;
+
+    while(*s1 && *s2 && !(tolower(*s1) - tolower(*s2)))
+    {
+        s1++;s2++;
+    }
+
+    if(!(*s2))
+        return s1;
+
+    return NULL;
+}
+
+unsigned long find_cellfield(const char _src[], VtsInfo * _vsf)
+{
+    unsigned long result= 100;
+    for(int k=0;k<_vsf->CellNoF;++k)
+    {
+        if(0== strcasecmp(_src,_vsf->CellField[k].Name))
+        {
+            result = k;
+            break;
+        }
+    }
+    return result;
+}
+
+
+void GetProfileWriteCache(SALEcData * _sdata, Plane * _out, ProfileCache * _cache, VTSDATAFLOAT _tol)
+{
+    /*
+     * get the height on upper surface
+     * most of this function is same as GetProfileVOFWriteCache
+     */
+
+    VtsInfo * _vsf = _sdata->VSF;
+    _out->NoC = _sdata->VSF->CellField[_out->Id].NoC;
+
+    // allocate data array for output
+    _out->data = (VTSDATAFLOAT ***) malloc(sizeof(VTSDATAFLOAT**)*_out->nCL[0]);
+    for(unsigned long ix=0;ix<_out->nCL[0];ix++)
+    {
+        _out->data[ix] = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*)*_out->nCL[1]);
+        for(unsigned long jy=0;jy<_out->nCL[1];jy++)
+        {
+            _out->data[ix][jy] = (VTSDATAFLOAT*) malloc(sizeof(VTSDATAFLOAT)*(_out->NoC));
+        }
+    }
+    // allocate data array for cache
+    _cache->nCL[0] = _out->nCL[0];
+    _cache->nCL[1] = _out->nCL[1];
+    _cache->kz = (int **) malloc(sizeof(int*)*_out->nCL[0]);
+    _cache->Lambda = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*)*_out->nCL[0]);
+    _cache->mask = (int **) malloc(sizeof(int*)*_out->nCL[0]);
+    for(unsigned long ix=0;ix<_out->nCL[0];++ix)
+    {
+        _cache->kz[ix] = (int *) malloc(sizeof(int)*_out->nCL[1]);
+        _cache->Lambda[ix] = (VTSDATAFLOAT *) malloc(sizeof(VTSDATAFLOAT)*_out->nCL[1]);
+        _cache->mask[ix] = (int *) malloc(sizeof(int)*_out->nCL[1]);
+    }
+    // copy some information into cache
+    _cache->n[0] = _out->n[0];
+    _cache->n[1] = _out->n[1];
+    _cache->n[2] = _out->n[2];
+    _cache->d    = _out->d;
+    _cache->VacuumId = _out->VacuumId;
+    strcpy(_cache->Vacuum,_out->Vacuum);
+    _cache->tol = _tol;
+    _cache->CacheState = 1;
+
+    // search the result and write the result into cache
+    unsigned long zColumn = _sdata->nGCLC[2];
+    VTSDATAFLOAT * zColVacuum = (VTSDATAFLOAT *) malloc(sizeof(VTSDATAFLOAT)*zColumn);
+    for(unsigned long ix=0;ix<_out->nCL[0];ix++)
+    {
+        for(unsigned long jy=0;jy<_out->nCL[1];jy++)
+        {
+            zColVacuum[0] = VtmGetCellData(_sdata,_out->VacuumId,ix,jy,0)[0];
+            for(unsigned long kz=1;kz<zColumn;++kz)
+            {
+
+                zColVacuum[kz] = VtmGetCellData(_sdata,_out->VacuumId,ix,jy,kz)[0];
+
+                // write information in cache
+                _cache->mask[ix][jy] = _out->mask[ix][jy];
+                _cache->kz[ix][jy] = (int) kz;
+                if(zColVacuum[kz]>_tol)
+                {
+                    VTSDATAFLOAT Lambda = (_tol-zColVacuum[kz-1])/(zColVacuum[kz] - zColVacuum[kz-1]);
+                    if(Lambda > 1.0) Lambda = 1.0;
+                    if(Lambda < 0.0) Lambda = 0.0;
+                    _cache->Lambda[ix][jy] = Lambda;
+
+                    _out->data[ix][jy][0] = _sdata->GCLC[2][kz]*Lambda + _sdata->GCLC[2][kz-1]*(1.-Lambda);
+
+                    break;
+                }
+            }
+        }
+    }
+
+    free(zColVacuum);
+}
+
+void GetProfileReadCache(SALEcData * _sdata, Plane * _out,ProfileCache * _cache)
+{
+    /*
+     * Get the height of upper surface
+     * use cache
+     */
+    _out->NoC = _sdata->VSF->CellField[_out->Id].NoC;
+
+    // allocate data array for output
+    _out->data = (VTSDATAFLOAT ***) malloc(sizeof(VTSDATAFLOAT**)*_out->nCL[0]);
+    for(unsigned long ix=0;ix<_out->nCL[0];ix++)
+    {
+        _out->data[ix] = (VTSDATAFLOAT **) malloc(sizeof(VTSDATAFLOAT*)*_out->nCL[1]);
+        for(unsigned long jy=0;jy<_out->nCL[1];jy++)
+        {
+            _out->data[ix][jy] = (VTSDATAFLOAT*) malloc(sizeof(VTSDATAFLOAT)*(_out->NoC));
+        }
+    }
+
+    // using lambda,kz in cache
+    for(unsigned long ix=0;ix<_out->nCL[0];ix++)
+    {
+        for(unsigned long jy=0;jy<_out->nCL[1];jy++)
+        {
+
+            unsigned long kz = _cache->kz[ix][jy];
+            VTSDATAFLOAT Lambda = _cache->Lambda[ix][jy];
+            _out->data[ix][jy][0] = _sdata->GCLC[2][kz]*Lambda + _sdata->GCLC[2][kz-1]*(1.-Lambda);
+        }
+    }
+}
+
+void GetProfileWithCache__(SALEcData * _sdata, Plane * _out, ProfileCache * _cache, VTSDATAFLOAT _tol)
+{
+
+    // check the id of variable
+    VtsInfo * _vsf = _sdata->VSF;
+    // the max id used in vsf, 100 is much less than CellNoF
+    _out->Id = 100;
+    _out->VacuumId = 100;
+    // search id of plane name
+    _out->VacuumId = find_cellfield(_out->Vacuum,_vsf);
+    _out->Id = find_cellfield(_out->Name,_vsf);
+    if(_out->Id==100 || _out->VacuumId==100)
+    {
+        fprintf(stdout,"cannot find %s in cellfield\n",_out->Name);
+        exit(0);
+    }
+
+
+    // check the Profile cache, if a cache matched, do not loop over the entire mesh
+    ProfileCache * _cur = _cache;
+    for(int icahe=0;_cache[icahe].CacheState!=0;icahe++)
+    {
+        _cur = _cache + icahe;
+#define dcmp(a,b) (fabsf((a)-(b))<1.0e-5)
+        if(_cur->VacuumId == _out->VacuumId && 0==strcasecmp(_cur->Vacuum,_out->Vacuum) &&
+           dcmp(_out->d,_cur->d) && dcmp(_out->n[0],_cur->n[0]) &&
+           dcmp(_out->n[1],_cur->n[1]) && dcmp(_out->n[2],_cur->n[2]) &&
+           dcmp(_cur->tol,_tol))
+        {
+            break;
+        }
+#undef dcmp
+    }
+
+    if(_cur->CacheState)
+    {
+        // get a cache
+        GetProfileReadCache(_sdata,_out,_cur);
+    } else
+    {
+        // miss
+        GetProfileWriteCache(_sdata,_out,_cur,_tol);
+    }
 }
 
 
