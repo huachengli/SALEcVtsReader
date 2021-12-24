@@ -8,6 +8,8 @@ LINK_LIBRARIES(z m)
 SET(SRCS src/VtsTag.c
         src/VtsReader.c
         src/InputParser.c
-        src/Utility.c)
+        src/Utility.c
+        src/Statistic.c)
 
 add_executable(SALEcVtsReader src/main.c  ${SRCS})
+add_executable(Remnant src/remnant.c ${SRCS})

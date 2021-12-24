@@ -244,6 +244,9 @@ void SetPlaneMesh(SALEcData * _sdata, Plane * _out, void (*_set)(SALEcData * ,Pl
 
 int BlockSearch(SALEcData * _sdata,VTSDATAFLOAT * _x)
 {
+    /*
+     * return the block index contain _x
+     */
     int _indices[VTSDIM];
     for(int k=0;k<VTSDIM;++k)
     {
@@ -312,6 +315,7 @@ void SetPlaneMask(SALEcData * _sdata, Plane * _out,int (*_search)(VtsInfo *, VTS
     }
 
     _out->scores = (unsigned long *) malloc(sizeof(unsigned long)*_sdata->VtsBlockNum);
+    // record number of points need interpolated in every block
     for(int k=0;k<_sdata->VtsBlockNum;++k) _out->scores[k] = 0;
 
     for(int ix=0;ix<_out->nCL[0];ix++)
@@ -322,12 +326,14 @@ void SetPlaneMask(SALEcData * _sdata, Plane * _out,int (*_search)(VtsInfo *, VTS
             VTSDATAFLOAT * ptmp = _out->coord[ix][jy];
             v_copy(ptmp,_out->X0);
             v_add_liner(ptmp,_out->CL[0][ix]-_out->CL[0][0],_out->nX[0],_out->CL[1][jy]-_out->CL[1][0],_out->nX[1]);
+            // set the coordinate of points on this plane
 
             _out->mask[ix][jy] = BlockSearch(_sdata,ptmp);
             if(_out->mask[ix][jy]>=0)
             {
                 _out->scores[_out->mask[ix][jy]]++;
                 _search(_sdata->VSF+_out->mask[ix][jy],ptmp,_out->offset[ix][jy],_out->weight[ix][jy]);
+                // get the position of points plane in specific block (offset + weight)
             }
         }
     }
@@ -550,7 +556,6 @@ void CleanCache(ProfileCache * _cache,int _n)
             SAFEFREE(_cache[j].Lambda)
         }
     }
-    SAFEFREE(_cache)
 }
 
 #undef SAFEFREE

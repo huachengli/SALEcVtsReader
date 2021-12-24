@@ -1,7 +1,11 @@
+//
+// Created by huacheng on 12/24/21.
+//
+
 #include <stdio.h>
 #include "Utility.h"
 
- int main(int argc,char * argv[])
+int main(int argc,char * argv[])
 {
     char get_plane[200];
     switch (argc) {
@@ -86,34 +90,15 @@
         {
             Out[k].d = vd[k];
             v_copy(Out[k].n,vn[k]);
-            if(strcasecmp(PlaneName[k],"Profile")==0)
-            {
-                strcpy(Out[k].Name,"VOF-0");
-                strcpy(Out[k].Vacuum,VacuumName);
-                SetPlaneMeshV(SaleData,Out+k);
-                SetPlaneMaskV(SaleData,Out+k);
-//                GetProfile(SaleData,Out+k);
-                GetProfileWithCache(SaleData,Out+k,PCache);
-            } else if(head__strcasestr(PlaneName[k],"Profile_") != NULL)
+            if(head__strcasestr(PlaneName[k],"Remnant_") != NULL)
             {
                 strcpy(Out[k].Name,PlaneName[k]+8);
                 strcpy(Out[k].Vacuum,VacuumName);
 
                 SetPlaneMeshV(SaleData,Out+k);
                 SetPlaneMaskV(SaleData,Out+k);
-//                GetProfileVOF(SaleData,Out+k);
-                GetProfileVOFWithCache(SaleData,Out+k,PCache);
-            } else if(head__strcasestr(PlaneName[k],"Remnant_") != NULL)
-            {
-                continue;
-                // this plane is processed by remnant.c
-            }
-            else
-            {
-                strcpy(Out[k].Name,PlaneName[k]);
-                SetPlaneMeshV(SaleData,Out+k);
-                SetPlaneMaskV(SaleData,Out+k);
-                GetPlaneDataC(SaleData,Out+k);
+                // Get the remnant_ distribution
+                GetRemant(SaleData,Out+k);
             }
 
             char PlaneOutName[400];

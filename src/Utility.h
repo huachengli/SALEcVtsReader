@@ -61,7 +61,6 @@ typedef struct
     VTSDATAFLOAT d;
     VTSDATAFLOAT tol;
 
-
     unsigned long nCL[VTSDIM-1];
     int ** mask;
     int ** kz;
@@ -155,5 +154,8 @@ void GetProfileVOFWithCache__(SALEcData * _sdata, Plane * _out, ProfileCache * _
 #define GetProfileVOFWithCache(_sdata,_out,_cache) GetProfileVOFWithCache__(_sdata,_out,_cache,0.95)
 
 void GetProfileWithCache__(SALEcData * _sdata, Plane * _out, ProfileCache * _cache, VTSDATAFLOAT _tol);
-#define GetProfileWithCache(_sdata,_out,_cache) GetProfileWithCache__(_sdata,_out,_cache,0.95)
+#define GetProfileWithCache(_sdata,_out,_cache) GetProfileWithCache__(_sdata,_out,_cache,0.05)
+
+void GetRemnantLim(SALEcData * _sdata, Plane * _out, VTSDATAFLOAT _tol);
+#define GetRemant(_sdata,_out) GetRemnantLim(_sdata,_out,0.05)
 #endif //SALECVTSREADER_UTILITY_H
