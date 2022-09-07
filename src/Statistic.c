@@ -21,6 +21,7 @@ void GetRemnantLim(SALEcData * _sdata, Plane * _out, VTSDATAFLOAT _tol)
 
     _out->NoC = _sdata->VSF->CellField[_out->Id].NoC;
 
+
     _out->data = (VTSDATAFLOAT ***) malloc(sizeof(VTSDATAFLOAT**)*_out->nCL[0]);
     for(unsigned long ix=0;ix<_out->nCL[0];ix++)
     {
@@ -35,23 +36,27 @@ void GetRemnantLim(SALEcData * _sdata, Plane * _out, VTSDATAFLOAT _tol)
 
 
     // integrate from bottom to top, calculate the target volume
-    for(unsigned long ix=0;ix<_out->nCL[0];ix++)
+
+    for(unsigned long ix=0;ix<_out->shape[0] - 1;ix++)
     {
         double ColumnDx = fabs(_sdata->GCLV[0][ix+1] - _sdata->GCLV[0][ix]);
-        for(unsigned long jy=0;jy<_out->nCL[1];jy++)
+        for(unsigned long jy=0;jy<_out->shape[1] - 1;jy++)
         {
             double ColumnDy = fabs(_sdata->GCLV[1][jy+1] - _sdata->GCLV[1][jy]);
             _out->data[ix][jy][0] = 0.;
+
             for(unsigned long kz=0;kz<zColumn;++kz)
             {
                 double zVacuumVof = VtmGetCellData(_sdata,_out->VacuumId,ix,jy,kz)[0];
                 double ColumnDz   = fabs(_sdata->GCLV[2][kz+1] - _sdata->GCLV[2][kz]);
                 _out->data[ix][jy][0] += ColumnDx*ColumnDy*ColumnDz*VtmGetCellData(_sdata,_out->Id,ix,jy,kz)[0];
-                if(zVacuumVof>_tol)
+                if(zVacuumVof>_tol && _tol>0.0)
                 {
                     break;
                 }
+
             }
+
         }
     }
 

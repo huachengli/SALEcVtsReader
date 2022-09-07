@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.11)
 
 project(SALEcVtsReader C)
 SET(CMAKE_C_STANDARD 99)
-SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -fopenmp -Wno-unused-result")
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -fopenmp -Wno-unused-result")
 
 LINK_LIBRARIES(z m)
 SET(SRCS src/VtsTag.c
@@ -13,3 +13,4 @@ SET(SRCS src/VtsTag.c
 
 add_executable(SALEcVtsReader src/main.c  ${SRCS})
 add_executable(Remnant src/remnant.c ${SRCS})
+add_executable(TracerView src/Tracer.c ${SRCS} src/TracerReader.c src/TracerReader.h src/AVLTree.c src/AVLTree.h)

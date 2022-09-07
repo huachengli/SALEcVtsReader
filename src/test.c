@@ -367,3 +367,35 @@ int TestBase64()
     fprintf(stdout,"\n ErrorNum:%d",ErrorNum);
     return 0;
 }
+
+int TestAVLTree()
+{
+    int a[10] = { 3, 2, 1, 4, 5, 6, 7, 10, 9, 8 };
+    AVLNode * root = NULL;
+    for(int k=0;k<10;k++)
+    {
+        AVLNode * tmp = (AVLNode *) malloc(sizeof(AVLNode));
+        tmp->attach = (uintptr_t) (a + k);
+        BalanceInsert(&root,tmp,CmpInt);
+    }
+
+    BFSTraverse(&root,20);
+
+    int b[4] = {11,6,1,20};
+    AVLNode * tmp = (AVLNode *) malloc(sizeof(AVLNode));
+    for(int k=0;k<4;++k)
+    {
+        tmp->attach = (uintptr_t) (b+k);
+        AVLNode * res = AVLQuery(root,tmp,CmpInt);
+        if(NULL != res)
+        {
+            fprintf(stdout,"%d is in AVLTree\n",b[k]);
+        } else
+        {
+            fprintf(stdout,"%d is not in AVLTree\n",b[k]);
+        }
+    }
+
+    AVLDelete(&root, NULL);
+    return 0;
+}

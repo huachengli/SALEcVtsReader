@@ -158,4 +158,6 @@ void GetProfileWithCache__(SALEcData * _sdata, Plane * _out, ProfileCache * _cac
 
 void GetRemnantLim(SALEcData * _sdata, Plane * _out, VTSDATAFLOAT _tol);
 #define GetRemant(_sdata,_out) GetRemnantLim(_sdata,_out,0.05)
+#define SumRemant(_sdata,_out) GetRemnantLim(_sdata,_out,-1.0)
+
 #endif //SALECVTSREADER_UTILITY_H

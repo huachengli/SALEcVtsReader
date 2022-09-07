@@ -98,7 +98,12 @@ int main(int argc,char * argv[])
                 SetPlaneMeshV(SaleData,Out+k);
                 SetPlaneMaskV(SaleData,Out+k);
                 // Get the remnant_ distribution
-                GetRemant(SaleData,Out+k);
+                SumRemant(SaleData,Out+k);
+            } else
+            {
+                // for other parameters in planes.plot do nothing
+                // without 'continue' statement, Segmentation fault occurs.
+                continue;
             }
 
             char PlaneOutName[400];
