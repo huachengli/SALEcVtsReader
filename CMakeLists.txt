@@ -11,6 +11,10 @@ SET(SRCS src/VtsTag.c
         src/Utility.c
         src/Statistic.c)
 
+SET(VTP_SRCS src/VtpReader.c
+        src/VtpTag.c)
+
 add_executable(SALEcVtsReader src/main.c  ${SRCS})
 add_executable(Remnant src/remnant.c ${SRCS})
 add_executable(TracerView src/Tracer.c ${SRCS} src/TracerReader.c src/TracerReader.h src/AVLTree.c src/AVLTree.h)
+add_executable(VtpTracer src/VtpTracer.c ${SRCS} ${VTP_SRCS} )

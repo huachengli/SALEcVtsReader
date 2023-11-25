@@ -1,6 +1,8 @@
 //
 // Created by huacheng on 3/23/22.
 //
+// process the salec tracer output in ascii format
+
 
 #include "InputParser.h"
 #include "TracerReader.h"
@@ -29,7 +31,6 @@ int main(int argc,char * argv[])
     CloseInputFile(ifp);
     LoadTracerInfo(&pTracerInfo,SALEcInpName);
 
-
     Tracer ** pTracer = (Tracer **) malloc(sizeof(Tracer*)*pTracerInfo.nproc);
     Tracer ** cTracer = (Tracer **) malloc(sizeof(Tracer*)*pTracerInfo.nproc);
     for(int k=0;k<pTracerInfo.nproc;++k)
@@ -47,11 +48,6 @@ int main(int argc,char * argv[])
     }
 
     // check the instance
-
-
-
-
-
 
     for(int k=0;k<pTracerInfo.nproc;++k)
     {
