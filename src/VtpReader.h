@@ -18,28 +18,32 @@
 #define SALEC_VTP_DataArray 21
 #define SALEC_VTP_DATAARRAY_OPTS 4
 #define SALEC_VTP_Points 29
+#define SALEC_VTP_PolyData 31
 #define SALEC_VTP_NONE 0
-
-
+#define VTPDIM 3
 typedef VtsData VtpData;
 typedef struct vtp_file
 {
     unsigned int NoP; // number of points
-    VTPDATAFLOAT **** Point;
+    VTPDATAFLOAT * Point;
 
     unsigned int PointNoF;
-    VtpData * PointField;
+    VtpData PointField[MaxStackDepth];
 
     // data for process vtk file
-    VtsStackFrame * VtpStack;
+    VtsStackFrame VtpStack[MaxStackDepth];
     unsigned int StackPos;
     unsigned int DataNodeType;
     VtpData * ActiveData;
+    char name[4096];
 } VtpFile;
 
 VtpFile * OpenVtpFile(const char vtp_name[]);
+int CloseVtpFile(VtpFile * fp);
 int VtpFrameHeadLoad(VtpFile * _vfp,FILE *fp);
 int VtpFrameLoad(VtpFile * _vsf,FILE *fp);
+int ShowVtpFileInfo(VtpFile * vfp);
+int VtpCoordinateReshape(VtpFile * _vsf);
 
 typedef struct {
     char TagName[MaxStrLen];

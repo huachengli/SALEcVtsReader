@@ -6,9 +6,7 @@
 
 void VtpLoad(VtpFile * _vfp, FILE *fp)
 {
-    _vfp->VtpStack = (VtsStackFrame *) malloc(sizeof(VtsStackFrame) * MaxStackDepth);
     _vfp->StackPos = 0;
-    _vfp->PointField = (VtsData *) malloc(sizeof(VtsData)*MaxStackDepth);
     _vfp->PointNoF = 0;
     VtpFrameHeadLoad(_vfp,fp);
     while(VtpFrameLoad(_vfp,fp))
@@ -19,6 +17,7 @@ void VtpLoad(VtpFile * _vfp, FILE *fp)
             ReadVtsBinaryF32(&(_vfp->ActiveData->Data), &(_vfp->ActiveData->DataLen), fp);
         }
     }
+    VtpCoordinateReshape(_vfp);
 }
 
 VtpFile * OpenVtpFile(const char vtp_name[])
@@ -30,10 +29,35 @@ VtpFile * OpenVtpFile(const char vtp_name[])
         exit(0);
     }
     VtpFile * tmp = malloc(sizeof(VtpFile));
+    snprintf(tmp->name,4096,"%s",vtp_name);
     VtpLoad(tmp,fp);
     fclose(fp);
     return tmp;
 }
+
+int CloseVtpFile(VtpFile * vfp)
+{
+    if(NULL == vfp) return 0;
+    // clear PointField
+    for(int k=0;k<vfp->PointNoF;++k)
+    {
+        free(vfp->PointField[k].Data);
+    }
+    // clear Points
+    // Points has been cleared in PointsData
+    return 1;
+}
+
+int ShowVtpFileInfo(VtpFile * vfp)
+{
+    fprintf(stdout,"%s\n",vfp->name);
+    for(int k=0;k<vfp->PointNoF;++k)
+    {
+        fprintf(stdout,"PointFiles:%s,len=%ld\n",vfp->PointField[k].Name,vfp->PointField[k].DataLen);
+    }
+    return 0;
+}
+
 
 int VtpFrameHeadLoad(VtpFile * _vfp,FILE *fp)
 {
@@ -60,7 +84,6 @@ int VtpFrameHeadLoad(VtpFile * _vfp,FILE *fp)
     return 1;
 }
 
-
 int VtpFrameLoad(VtpFile * _vsf,FILE *fp)
 {
     unsigned char LineBuffer[1024];
@@ -82,6 +105,32 @@ int VtpFrameLoad(VtpFile * _vsf,FILE *fp)
         VtpTag2P[k].P(LineBuffer+r,_vsf);
     }
     return _vsf->StackPos - 1;
+}
+
+int VtpCoordinateReshape(VtpFile * _vsf)
+{
+    int k = 0;
+    for(;k<_vsf->PointNoF;++k)
+    {
+        if(0== strcasecmp("coordinate",_vsf->PointField[k].Name)) break;
+    }
+
+    if(k==_vsf->PointNoF)
+    {
+        fprintf(stdout,"No coordinate information in the vts!\n");
+    }
+    VTSDATAFLOAT * PointData = _vsf->PointField[k].Data;
+    unsigned long PointDataLen = _vsf->PointField[k].DataLen;
+
+    if(_vsf->NoP*VTPDIM!=PointDataLen)
+    {
+        fprintf(stdout,"number of coordinates is %ld, but %d is wanted\n",PointDataLen,_vsf->NoP*VTPDIM);
+        exit(0);
+    }
+
+    // set Points ptr
+    _vsf->Point = PointData;
+    return (int) PointDataLen;
 }
 
 

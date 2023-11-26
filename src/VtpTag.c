@@ -1,5 +1,5 @@
 //
-// Created by huach on 26/11/2023.
+// Created by huacheng on 26/11/2023.
 //
 
 #include "VtpReader.h"
@@ -26,33 +26,13 @@
             } \
         }
 #define DeclareVtpFunc(name) VtpBeginFunc(name) VtpEndFunc(name)
-#define DeclareVtpSkip(name) void VtpTag##name##Process(const char* _values,VtpFile * _vfp){}
-
-/*
- *  generate example DeclareVtpFunc(VTKFile)
-void VtpTagVTKFileBeginFunc(const char* _values,VtpFile * _vfp)
-{
-    VtsStackFrame * _vsf = _vfp->VtpStack + _vfp->StackPos;
-    _vsf->Tag = SALEC_VTP_VTKFILE;
-    strcpy(_vsf->Name,__func__);
-    _vfp->StackPos ++;
-}
-
-void VtpTagVTKFileEndFunc(const char* _values,VtpFile * _vfp)
-{
-    VtsStackFrame * _vsf = _vfp->VtpStack + _vfp->StackPos - 1;
-    if(_vsf->Tag!= SALEC_VTP_VTKFILE)
-    {
-        fprintf(stdout,"VTKFile Tag does not match!\n");
-        exit(0);
-    } else
-    {
-        _vfp->StackPos --;
-    }
-}
- */
+#define DeclareVtpSkip(name) void VtpTag##name##Process(const char* _values,VtpFile * _vfp) \
+                            {_vfp->DataNodeType = SALEC_VTP_##name;}
+#define SETVtpTag2P(name) {.TagName = #name,  .P = VtpTag##name##BeginFunc},\
+                        {.TagName = "/"#name, .P = VtpTag##name##EndFunc},
 
 DeclareVtpSkip(VTKFile)
+DeclareVtpSkip(Points)
 void VtpTagDataArrayProcess(const char* _values,VtpFile * _vfp)
 {
     VtsData * _vdp = NULL;
@@ -101,32 +81,32 @@ void VtpTagPieceProcess(const char* _values,VtpFile * _vfp)
     VtsStackFrame * _vsf = _vfp->VtpStack + _vfp->StackPos;
     char _vbuffer[50];
     int r = Strok(_values," =\"",_vbuffer);
-    if(strcasecmp("Extent",_vbuffer)==0)
+    // just process the NumberOfPoints property
+    if(strcasecmp("NumberOfPoints",_vbuffer)==0)
     {
         r += Strok(_values+r," =\"",_vbuffer);
-        int ex0 = atoi(_vbuffer);
-        r += Strok(_values+r," =\"",_vbuffer);
-        int ex1 = atoi(_vbuffer);
-        r += Strok(_values+r," =\"",_vbuffer);
-        int ey0 = atoi(_vbuffer);
-        r += Strok(_values+r," =\"",_vbuffer);
-        int ey1 = atoi(_vbuffer);
-        r += Strok(_values+r," =\"",_vbuffer);
-        int ez0 = atoi(_vbuffer);
-        r += Strok(_values+r," =\"",_vbuffer);
-        int ez1 = atoi(_vbuffer);
+        _vfp->NoP = atoi(_vbuffer);
     } else
     {
         fprintf(stdout,"TagPiece undefined property:%s!",_vbuffer);
     }
 }
 
+DeclareVtpSkip(PolyData)
+DeclareVtpSkip(PointData)
+
 DeclareVtpFunc(VTKFile)
 DeclareVtpFunc(Piece)
-
-
+DeclareVtpFunc(DataArray)
+DeclareVtpFunc(Points)
+DeclareVtpFunc(PolyData)
+DeclareVtpFunc(PointData)
 VtpTagPair VtpTag2P[] = {
-        {.TagName = "VTKFile",  .P = VtpTagVTKFileBeginFunc},
-        {.TagName = "/VTKFile", .P = VtpTagVTKFileEndFunc},
-        {.TagName = "XXXXXXXX", .P = NULL}
+        SETVtpTag2P(VTKFile)
+        SETVtpTag2P(Piece)
+        SETVtpTag2P(DataArray)
+        SETVtpTag2P(Points)
+        SETVtpTag2P(PolyData)
+        SETVtpTag2P(PointData)
+        {.TagName = "unknown", .P = NULL}
 };

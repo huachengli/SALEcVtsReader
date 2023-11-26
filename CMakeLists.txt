@@ -12,7 +12,8 @@ SET(SRCS src/VtsTag.c
         src/Statistic.c)
 
 SET(VTP_SRCS src/VtpReader.c
-        src/VtpTag.c)
+        src/VtpTag.c
+        src/VtkWriter.c)
 
 add_executable(SALEcVtsReader src/main.c  ${SRCS})
 add_executable(Remnant src/remnant.c ${SRCS})

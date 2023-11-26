@@ -78,13 +78,6 @@ void Base64Encode(unsigned char * _str, unsigned _slen, unsigned char * _code);
 int Base64Decode(unsigned char * _code, unsigned _clen, unsigned char * _str);
 void RandomStr(unsigned char * _str,int _slen);
 
-/*
- * just copy from citcoms, never used.
- */
-void zlibcompress(unsigned char* in, int nn, unsigned char** out, int *nn2);
-void IntToUnsignedChar(int * _iarray, int _inn, unsigned char * _carray);
-void UnsignedCharToInt(unsigned char * _carray, int _cnn, int * _iarray);
-void FloatToUnsignedChar(float * _farray, int _fnn, unsigned char * _carray);
 
 void ReadVtsBinaryF32(float ** _data,unsigned long * _dlen,FILE * fp);
 void VtsLoad(VtsInfo * _vfp,FILE * fp);
