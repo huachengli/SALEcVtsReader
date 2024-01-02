@@ -107,7 +107,7 @@ void zlibcompress(unsigned char* in, int nn, unsigned char** out, int *nn2)
     unsigned char outz[CHUNK];
 
     /* compression level */
-    int level = Z_DEFAULT_COMPRESSION;
+    int level = Z_NO_COMPRESSION; //Z_BEST_SPEED;// Z_DEFAULT_COMPRESSION;
     int ret,flush;
     int i,j,k;
 
@@ -115,7 +115,7 @@ void zlibcompress(unsigned char* in, int nn, unsigned char** out, int *nn2)
     z_stream strm;
 
     /* hope compressed data will be <= uncompressed */
-    *out = malloc(sizeof(unsigned char)*nn);
+    *out = malloc(sizeof(unsigned char)*(nn*1.02+64));
 
     strm.zalloc = Z_NULL;
     strm.zfree = Z_NULL;

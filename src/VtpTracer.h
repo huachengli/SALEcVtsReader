@@ -18,6 +18,10 @@ typedef struct GridTracerDef
     float * mtem;
     float * ejecta_X;
     float * ejecta_T;
+    float * ejecta_U;
+    float * ejecta_V;
+    float * ejecta_t;
+    float * ejecta_x;
     float * id;
     float * matid;
     float * mask;
@@ -34,6 +38,9 @@ typedef struct GridTracerDef
     double t0;
     double gz;
     char prefix[MaxStrLen];
+    int ejecta_num; // num of ejecta recorded in GridTracer
+    float z_low;
+    float z_up; // the threshold for detect ejectas
 } GridTracer;
 
 typedef struct TracerFileCollectDef
@@ -50,10 +57,12 @@ typedef struct name2data
 } Name2VtpData;
 
 VtpTracerCollect * OpenVtpTracerCollect(const char * _prefix, int _nof);
+VtpTracerCollect * FlushVtpTracerCollect(GridTracer * gtf,const char * _prefix, int _nof);
 int CloseVtpTracerCollect(VtpTracerCollect * _vtc);
 int InitGridTracer(GridTracer * gtf,InputFile * ifp);
 int LoadGridTxtFile(GridTracer * gtf,const char * fname);
 int FlushGridTracerFromVtp(GridTracer * gtf, VtpFile * vfp);
 int FlushGridTracerFromVtpCollect(GridTracer * gtf, VtpTracerCollect * tvtcp);
 int WriteGridTracer(GridTracer * gtf, const char * vts_name);
+int ExportGridTracerF32Bin(GridTracer * gtf, const char * binprefix);
 #endif //SALECVTSREADER_VTPTRACER_H

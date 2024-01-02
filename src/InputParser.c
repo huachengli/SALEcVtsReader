@@ -192,7 +192,7 @@ InputFile * OpenInputFile(const char fname[])
 {
     FILE * fp = fopen(fname,"r");
     InputFile * ifp = (InputFile *) malloc(sizeof(InputFile));
-    if(NULL == ifp)
+    if(NULL == fp)
     {
         fprintf(stdout,"Cannot open input file * %s * \n",fname);
         exit(0);
