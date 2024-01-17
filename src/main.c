@@ -41,7 +41,6 @@
         GETVNK(1,y)
         GETVNK(2,z)
 #undef GETVNK
-
         vd[k] = GetValueDk(ifp,"Plane.d",k,"0.0");
         GetValueSk(ifp,"Plane.name",PlaneName[k],k,"Density");
     }

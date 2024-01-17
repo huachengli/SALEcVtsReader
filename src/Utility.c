@@ -18,7 +18,6 @@ void LoadInpInfo(SALEcData * _sdata,const char* _inputName)
     _sdata->Noffset = GetValueI(ifp,"processor.noffset","8");
     CloseInputFile(ifp);
     _sdata->VtsBlockNum = _sdata->Npgx[0]*_sdata->Npgx[1]*_sdata->Npgx[2];
-
 }
 
 void LoadVtsData(SALEcData * _sdata,const char * _vtsPrefix)
