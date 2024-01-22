@@ -8,13 +8,17 @@
 void Load2dInpInfo(SALEcData * _sdata,SALEcPlanetInfo * _pdata,const char* _inputName)
 {
     InputFile * ifp = OpenInputFile(_inputName);
-    _sdata->Npgx[0] = GetValueI(ifp,"processor.npgx","2");
-    _sdata->Npgx[1] = GetValueI(ifp,"processor.npgy","2");
-    _sdata->Npgx[2] = 1;
-    _sdata->Npx[0] = GetValueI(ifp,"mesh.npx","32");
-    _sdata->Npx[1] = GetValueI(ifp,"mesh.npy","32");
-    _sdata->Npx[2] = 1;
-    _sdata->Noffset = GetValueI(ifp,"processor.noffset","2");
+    if(NULL != _sdata)
+    {
+        _sdata->Npgx[0] = GetValueI(ifp,"processor.npgx","2");
+        _sdata->Npgx[1] = GetValueI(ifp,"processor.npgy","2");
+        _sdata->Npgx[2] = 1;
+        _sdata->Npx[0] = GetValueI(ifp,"mesh.npx","32");
+        _sdata->Npx[1] = GetValueI(ifp,"mesh.npy","32");
+        _sdata->Npx[2] = 1;
+        _sdata->Noffset = GetValueI(ifp,"processor.noffset","2");
+        _sdata->VtsBlockNum = _sdata->Npgx[0]*_sdata->Npgx[1]*_sdata->Npgx[2];
+    }
 
     // load planet info
     char TargetType[256];
@@ -24,20 +28,23 @@ void Load2dInpInfo(SALEcData * _sdata,SALEcPlanetInfo * _pdata,const char* _inpu
         fprintf(stdout,"%s:target type = %s\n",__func__ ,TargetType);
         exit(0);
     }
-    _pdata->r_planet = GetValueD(ifp,"taregt.r_planet","1750.0e3");
-    _pdata->center[0] = 0.;
-    _pdata->center[1] = - _pdata->r_planet;
-    _pdata->center[2] = 0.;
-    GetValueS(ifp,"output.prefix",_pdata->prefix,"ParaTest");
+
+    if(NULL != _pdata)
+    {
+        _pdata->r_planet = GetValueD(ifp,"taregt.r_planet","1750.0e3");
+        _pdata->center[0] = 0.;
+        _pdata->center[1] = - _pdata->r_planet;
+        _pdata->center[2] = 0.;
+        GetValueS(ifp,"output.prefix",_pdata->prefix,"ParaTest");
+    }
     CloseInputFile(ifp);
-    _sdata->VtsBlockNum = _sdata->Npgx[0]*_sdata->Npgx[1]*_sdata->Npgx[2];
 }
 
 void Reset2dZcoord(SALEcData * _sdata)
 {
     _sdata->GCLC[2][0] = 0.f;
     _sdata->GCLV[2][1] = 1.f;
-    _sdata->GCLV[2][1] =-1.f;
+    _sdata->GCLV[2][0] =-1.f;
 }
 
 void LoadCitcom2dXX(Citcom2dXX * _cdata, const char * _cname)
@@ -56,8 +63,19 @@ void LoadCitcom2dXX(Citcom2dXX * _cdata, const char * _cname)
     fread(_cdata->XXs, sizeof(float),3*_cdata->nno,fp);
     fclose(fp);
 
-    char * _bname = strtok(_cname,".");
+    char _cname_cpy[256];
+    strcpy(_cname_cpy,_cname);
+    assert(strlen(_cname) <= 256);
+    char * _bname = strtok(_cname_cpy,".");
     strcpy(_cdata->cname,_bname);
+}
+
+#define SAFEFREE(x) if(NULL!=(x)) free(x);
+void CleanCitcom2dXX(Citcom2dXX * _cdata)
+{
+    free(_cdata->XX);
+    free(_cdata->XXs);
+    free(_cdata->T);
 }
 
 void ConsistentCitcom2dXX(Citcom2dXX * _cdata, SALEcPlanetInfo * _sinfo)
@@ -87,7 +105,35 @@ void ExportCitcom2dT(Citcom2dXX * _cdata)
     fwrite(&(_cdata->nno), sizeof(int),1,fp);
     fwrite(_cdata->T, sizeof(float),_cdata->nno,fp);
     fclose(fp);
+    fprintf(stdout,"write temperature into %s\n",tname);
 }
+
+void ExportCitcom2dTdiff(Citcom2dXX * _cdata, Citcom2dXX * _x)
+{
+    char tname[256];
+    strcpy(tname,_cdata->cname);
+    strcat(tname,".T");
+    FILE * fp = fopen(tname,"wb");
+    if(NULL == fp)
+    {
+        fprintf(stdout,"%s:cannot open %s\n",__func__,tname);
+    }
+
+    float * _tmp = (float *) malloc(sizeof(float)*_cdata->nno);
+    assert(NULL != _tmp);
+
+    for(int k=0;k<_cdata->nno;++k)
+    {
+        _tmp[k] = _cdata->T[k] - _x->T[k];
+        // some filter for surprise values ???
+    }
+
+    fwrite(&(_cdata->nno), sizeof(int),1,fp);
+    fwrite(_tmp, sizeof(float),_cdata->nno,fp);
+    free(_tmp);
+    fclose(fp);
+}
+
 
 int OffsetSerchC2d(VtsInfo * _vsf, VTSDATAFLOAT * _x, int * _indices, VTSDATAFLOAT * _weight)
 {
@@ -252,4 +298,10 @@ void LoadVts2dData(SALEcData * _sdata,const char * _vtsPrefix)
     _sdata->BCLV[2][1] =  1.;
 
     // notice the BCLC is not used, Block Id is determined according to the BCLV
+
+    // reset the global coordinate line in z direction.
+    _sdata->GCLC[2][0] = 0.f;
+    _sdata->GCLV[2][1] = 1.f;
+    _sdata->GCLV[2][0] =-1.f;
+
 }
