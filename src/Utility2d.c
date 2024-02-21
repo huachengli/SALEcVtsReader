@@ -36,8 +36,43 @@ void Load2dInpInfo(SALEcData * _sdata,SALEcPlanetInfo * _pdata,const char* _inpu
         _pdata->center[1] = - _pdata->r_planet;
         _pdata->center[2] = 0.;
         GetValueS(ifp,"output.prefix",_pdata->prefix,"ParaTest");
+
+        // load some materials info
+        _pdata->surf_tem = GetValueD(ifp,"target.surf_temperature","-1.0");
+        if(_pdata->surf_tem < 0.)
+        {
+            _pdata->surf_tem = GetValueDk(ifp,"target.temperature",1,"293.0");
+        }
+        _pdata->nmat = GetValueI(ifp,"material.nm","2");
+        assert(_pdata->nmat >= 2);
+        _pdata->ref = malloc(sizeof(MatRef)*_pdata->nmat);
+        for(int matid=0;matid<_pdata->nmat;++matid)
+        {
+            if(matid == 0)
+            {
+                _pdata->ref[matid].Asimon   = 1.0;
+                _pdata->ref[matid].Csimon   = 1.0;
+                _pdata->ref[matid].Tmelt0   = 0.0;
+                _pdata->ref[matid].Tfrac    = 1.0;
+                _pdata->ref[matid].Tdelta   = 0.0;
+            }
+            else
+            {
+                _pdata->ref[matid].Asimon   = 1.0/GetValueDk(ifp,"material.SimonA",matid,"6.00e9");
+                _pdata->ref[matid].Csimon   = 1.0/GetValueDk(ifp,"material.SimonC",matid,"3.00");
+                _pdata->ref[matid].Tmelt0   = GetValueDk(ifp,"material.SimonT0",matid,"933.0");
+                _pdata->ref[matid].Tfrac    = GetValueDk(ifp,"material.OhnakaXi",matid,"1.2");
+                _pdata->ref[matid].Tdelta   = GetValueDk(ifp,"material.Tdelta",matid,"0.0");
+            }
+
+        }
     }
+
     CloseInputFile(ifp);
+}
+
+double SimonLiquid(double pre,const MatRef * _s){
+    return _s->Tmelt0 * pow(_s->Asimon*pre + 1.0,_s->Csimon) + _s->Tdelta;
 }
 
 void Reset2dZcoord(SALEcData * _sdata)
@@ -57,7 +92,7 @@ void LoadCitcom2dXX(Citcom2dXX * _cdata, const char * _cname)
     }
     fread(&(_cdata->nno), sizeof(int),1,fp);
     _cdata->XXs = (float *) malloc(sizeof(float)*_cdata->nno*3);
-    _cdata->XX  = (float *) malloc(sizeof(float)*_cdata->nno*3);
+    _cdata->XXc  = (float *) malloc(sizeof(float) * _cdata->nno * 3);
     _cdata->T   = (float *) malloc(sizeof(float)*_cdata->nno);
 
     fread(_cdata->XXs, sizeof(float),3*_cdata->nno,fp);
@@ -73,7 +108,7 @@ void LoadCitcom2dXX(Citcom2dXX * _cdata, const char * _cname)
 #define SAFEFREE(x) if(NULL!=(x)) free(x);
 void CleanCitcom2dXX(Citcom2dXX * _cdata)
 {
-    free(_cdata->XX);
+    free(_cdata->XXc);
     free(_cdata->XXs);
     free(_cdata->T);
 }
@@ -84,10 +119,10 @@ void ConsistentCitcom2dXX(Citcom2dXX * _cdata, SALEcPlanetInfo * _sinfo)
     // to XX (cartesian 2d aligned with SALEc)
     for(int k=0;k<_cdata->nno;++k)
     {
-        _cdata->XX[k*3 + 0] = _cdata->XXs[k*3 + 0] * _sinfo->r_planet;
-        _cdata->XX[k*3 + 1] = _cdata->XXs[k*3 + 1] * _sinfo->r_planet - _sinfo->r_planet;
-        _cdata->XX[k*3 + 2] = _cdata->XXs[k*3 + 2] * _sinfo->r_planet;
-        assert(_cdata->XX[k*3 + 2] == 0.);
+        _cdata->XXc[k * 3 + 0] = _cdata->XXs[k * 3 + 0] * _sinfo->r_planet;
+        _cdata->XXc[k * 3 + 1] = _cdata->XXs[k * 3 + 1] * _sinfo->r_planet - _sinfo->r_planet;
+        _cdata->XXc[k * 3 + 2] = _cdata->XXs[k * 3 + 2] * _sinfo->r_planet;
+        assert(_cdata->XXc[k * 3 + 2] == 0.);
     }
 }
 
@@ -105,7 +140,7 @@ void ExportCitcom2dT(Citcom2dXX * _cdata)
     fwrite(&(_cdata->nno), sizeof(int),1,fp);
     fwrite(_cdata->T, sizeof(float),_cdata->nno,fp);
     fclose(fp);
-    fprintf(stdout,"write temperature into %s\n",tname);
+    fprintf(stdout,"\n%s:write data to %s\n",__func__,tname);
 }
 
 void ExportCitcom2dTdiff(Citcom2dXX * _cdata, Citcom2dXX * _x)
@@ -132,7 +167,51 @@ void ExportCitcom2dTdiff(Citcom2dXX * _cdata, Citcom2dXX * _x)
     fwrite(_tmp, sizeof(float),_cdata->nno,fp);
     free(_tmp);
     fclose(fp);
+
+    fprintf(stdout,"\n%s:write data to %s\n",__func__,tname);
 }
+
+void ExportCitcom2dTNondim(Citcom2dXX * _cdata, Citcom2dXX * _x)
+{
+    // _x is the reference
+    char tname[256];
+    strcpy(tname,_cdata->cname);
+    strcat(tname,".T");
+    FILE * fp = fopen(tname,"wb");
+    if(NULL == fp)
+    {
+        fprintf(stdout,"%s:cannot open %s\n",__func__,tname);
+    }
+
+    float * _tmp = (float *) malloc(sizeof(float)*_cdata->nno);
+    assert(NULL != _tmp);
+
+    float tem_bottom = _x->T[0];
+    float tem_top    = _x->T[1];
+    for(int k=0;k<_cdata->nno;++k)
+    {
+        tem_bottom = fmaxf(tem_bottom,_x->T[k]);
+        tem_top    = fminf(tem_top,_x->T[k]);
+    }
+    assert(tem_top < tem_bottom);
+    // get the non-dim T
+    for(int k=0;k<_cdata->nno;++k)
+    {
+        _tmp[k] = (_cdata->T[k] - tem_top)/(tem_bottom - tem_top);
+//        _tmp[k] = (_cdata->T[k] - tem_top);
+    }
+
+    fwrite(&(_cdata->nno), sizeof(int),1,fp);
+    fwrite(_tmp, sizeof(float),_cdata->nno,fp);
+    free(_tmp);
+    fclose(fp);
+
+    fprintf(stdout,"\n%s:write data to %s\n",__func__,tname);
+    fprintf(stdout,"     tem_bottom:%10.5f\n"
+                   "     tem_top   :%10.5f\n"
+                   "     tem_delta :%10.5f\n",tem_bottom,tem_top,tem_bottom-tem_top);
+}
+
 
 
 int OffsetSerchC2d(VtsInfo * _vsf, VTSDATAFLOAT * _x, int * _indices, VTSDATAFLOAT * _weight)
@@ -168,7 +247,70 @@ int BlockSearch2d(SALEcData * _sdata,VTSDATAFLOAT * _x)
     return _indices[1] + _sdata->Npgx[1]*_indices[0];
 }
 
+void CapLiquidTem(SALEcData * _sdata, SALEcData * _sdata_fill, SALEcPlanetInfo * _pdata)
+{
+    unsigned long VofId = find_cellfield("e_vof",_sdata->VSF);
+    unsigned long TemId = find_cellfield("e_tem",_sdata->VSF);
+    unsigned long PreId = find_cellfield("e_pre",_sdata->VSF);
 
+    for(int i=0;i<_sdata->nGCLC[0];++i)
+    {
+        for(int j=0;j<_sdata->nGCLC[1];++j)
+        {
+            VTSDATAFLOAT * vof_f = Vtm2dGetCellData(_sdata,VofId,i,j);
+            VTSDATAFLOAT * tem_f = Vtm2dGetCellData(_sdata,TemId,i,j);
+            VTSDATAFLOAT * pre_f = Vtm2dGetCellData(_sdata,PreId,i,j);
+            VTSDATAFLOAT * vof_f2 = Vtm2dGetCellData(_sdata_fill,VofId,i,j);
+            VTSDATAFLOAT * tem_f2 = Vtm2dGetCellData(_sdata_fill,TemId,i,j);
+
+            if(vof_f2[0] > 1.0e-5) tem_f2[0] = _pdata->surf_tem;
+
+            double cell_liquid = -1.0;
+            int cell_nmat = 0;
+            for(int matid=1;matid<_pdata->nmat;++matid)
+            {
+                if(vof_f[matid] > 1e-5)
+                {
+                    cell_nmat ++;
+                    cell_liquid = fmax(SimonLiquid(pre_f[0],_pdata->ref + matid),cell_liquid);
+                }
+            }
+
+            if(cell_nmat >= 1)
+            {
+                tem_f[0] = fmin(cell_liquid,tem_f[0]);
+            }
+            else
+            {
+                // try to fill data from sdata_fill
+                tem_f[0] = tem_f2[0];
+            }
+        }
+    }
+}
+
+
+
+int GetVsfCellId(VtsInfo * _vsf, const char * TemVsfName)
+{
+    int TemId = -1;
+    for(int k=0;k<_vsf->CellNoF;++k)
+    {
+        if(0== strcasecmp(TemVsfName,_vsf->CellField[k].Name))
+        {
+            TemId = k;
+            break;
+        }
+    }
+
+    if(TemId==100)
+    {
+        fprintf(stdout,"%s:cannot find %s in cellfield\n",__func__ ,TemVsfName);
+        exit(0);
+    }
+
+    return TemId;
+}
 
 void InterpolateCitcom2dT(Citcom2dXX * _cdata, SALEcData * _sdata)
 {
@@ -198,7 +340,7 @@ void InterpolateCitcom2dT(Citcom2dXX * _cdata, SALEcData * _sdata)
     // loop on all the citcom2d coordinates
     for(int k=0;k<_cdata->nno;++k)
     {
-        VTSDATAFLOAT * xk = _cdata->XX + 3*k;
+        VTSDATAFLOAT * xk = _cdata->XXc + 3 * k;
         VTSDATAFLOAT local_xk[4] = {0.};
         int indices[4] = {0};
 
@@ -304,4 +446,41 @@ void LoadVts2dData(SALEcData * _sdata,const char * _vtsPrefix)
     _sdata->GCLV[2][1] = 1.f;
     _sdata->GCLV[2][0] =-1.f;
 
+}
+
+VTSDATAFLOAT * Vts2dGetCellData(VtsInfo * _vsf,unsigned long k,unsigned long _i, unsigned long _j)
+{
+    // just ignore the z direction check
+    unsigned long _k =0;
+    unsigned int cdatelen = _vsf->CellField[k].NoC;
+    if((_i< 0) || (_i>=_vsf->Nxp[0]-1))
+    {
+        fprintf(stdout,"CellData out of X-extent: [%ld,%ld,%ld]",_i,_j,_k);
+        exit(0);
+    } else if((_j< 0) || (_j>=_vsf->Nxp[1]-1))
+    {
+        fprintf(stdout,"CellData out of Y-extent: [%ld,%ld,%ld]",_i,_j,_k);
+        exit(0);
+    }else
+    {
+        return _vsf->CellField[k].Data + (_i + (_vsf->Nxp[0]-1)*(_j + (_vsf->Nxp[1]-1)*_k))*cdatelen;
+    }
+}
+
+VTSDATAFLOAT* Vtm2dGetCellData(SALEcData * _sdata, unsigned long k, unsigned long _i,unsigned long _j)
+{
+    unsigned long BlockId[VTSDIM];
+    unsigned long BlockOffset[VTSDIM];
+
+    BlockId[0] = (_i)/_sdata->Npx[0];
+    BlockOffset[0] = 2+(_i)%_sdata->Npx[0];
+
+    BlockId[1] = (_j)/_sdata->Npx[1];
+    BlockOffset[1] = 2+(_j)%_sdata->Npx[1];
+
+    BlockId[2] = 0;
+    BlockOffset[2] = 0;
+
+    unsigned long LId = BlockId[0] + _sdata->Npgx[0]*(BlockId[1] + _sdata->Npgx[1]*BlockId[2]);
+    return Vts2dGetCellData(_sdata->VSF+LId,k,BlockOffset[0],BlockOffset[1]);
 }
