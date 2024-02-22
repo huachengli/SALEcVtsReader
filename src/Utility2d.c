@@ -63,6 +63,12 @@ void Load2dInpInfo(SALEcData * _sdata,SALEcPlanetInfo * _pdata,const char* _inpu
                 _pdata->ref[matid].Tmelt0   = GetValueDk(ifp,"material.SimonT0",matid,"933.0");
                 _pdata->ref[matid].Tfrac    = GetValueDk(ifp,"material.OhnakaXi",matid,"1.2");
                 _pdata->ref[matid].Tdelta   = GetValueDk(ifp,"material.Tdelta",matid,"0.0");
+
+                // load the polynomial liquids
+                _pdata->ref[matid].PolyLiq  = GetValueIk(ifp,"material.PolyLiq",matid,"0");
+                _pdata->ref[matid].Tlidc1   = GetValueDk(ifp,"material.Tlidc1",matid,"0.0");
+                _pdata->ref[matid].Tlidc2   = GetValueDk(ifp,"material.Tlidc2",matid,"0.0");
+                _pdata->ref[matid].Tlidc3   = GetValueDk(ifp,"material.Tlidc3",matid,"0.0");
             }
 
         }
@@ -73,6 +79,16 @@ void Load2dInpInfo(SALEcData * _sdata,SALEcPlanetInfo * _pdata,const char* _inpu
 
 double SimonLiquid(double pre,const MatRef * _s){
     return _s->Tmelt0 * pow(_s->Asimon*pre + 1.0,_s->Csimon) + _s->Tdelta;
+}
+
+double PolynomialLiquid(double pre, const MatRef * _s){
+    double liquid_tem = _s->Tmelt0 * pow(_s->Asimon*pre + 1.0,_s->Csimon) + _s->Tdelta; // simon approximation
+    if(_s->PolyLiq > 0)
+    {
+        double p_gpa = pre*1.0e-9;
+        liquid_tem = _s->Tlidc1 + _s->Tlidc2*p_gpa + _s->Tlidc3*p_gpa*p_gpa;
+    }
+    return liquid_tem;
 }
 
 void Reset2dZcoord(SALEcData * _sdata)
@@ -272,7 +288,7 @@ void CapLiquidTem(SALEcData * _sdata, SALEcData * _sdata_fill, SALEcPlanetInfo *
                 if(vof_f[matid] > 1e-5)
                 {
                     cell_nmat ++;
-                    cell_liquid = fmax(SimonLiquid(pre_f[0],_pdata->ref + matid),cell_liquid);
+                    cell_liquid = fmax(PolynomialLiquid(pre_f[0],_pdata->ref + matid),cell_liquid);
                 }
             }
 

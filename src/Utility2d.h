@@ -16,6 +16,12 @@ typedef struct
     double Tmelt0;
     double Tfrac;
     double Tdelta;
+
+    // liquids
+    int PolyLiq; // flag for whether use poly liquids
+    double Tlidc1;
+    double Tlidc2;
+    double Tlidc3;
 } MatRef;
 
 typedef struct
@@ -50,6 +56,7 @@ void ExportCitcom2dTNondim(Citcom2dXX * _cdata, Citcom2dXX * _x);
 void InterpolateCitcom2dT(Citcom2dXX * _cdata, SALEcData * _sdata);
 void LoadVts2dData(SALEcData * _sdata,const char * _vtsPrefix);
 double SimonLiquid(double pre,const MatRef * _s);
+double PolynomialLiquid(double pre, const MatRef * _s);
 int GetVsfCellId(VtsInfo * _vsf, const char * TemVsfName);
 void CapLiquidTem(SALEcData * _sdata, SALEcData * _sdata_fill,SALEcPlanetInfo * _pdata);
 VTSDATAFLOAT* Vtm2dGetCellData(SALEcData * _sdata, unsigned long k, unsigned long _i,unsigned long _j);
