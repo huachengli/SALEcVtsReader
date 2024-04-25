@@ -70,7 +70,6 @@ typedef struct
     VtsData * ActiveVtsData;
 } VtsInfo;
 
-
 /*
  * Base64 encoding/uncoding
  */

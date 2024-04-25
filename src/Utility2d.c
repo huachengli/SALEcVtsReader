@@ -23,7 +23,7 @@ void Load2dInpInfo(SALEcData * _sdata,SALEcPlanetInfo * _pdata,const char* _inpu
     // load planet info
     char TargetType[256];
     GetValueS(ifp,"target.type",TargetType,"none");
-    if(0!= strcasecmp(TargetType,"sphere"))
+    if(0!= strcasecmp(TargetType,"sphere") && 0!= strcasecmp(TargetType,"plane"))
     {
         fprintf(stdout,"%s:target type = %s\n",__func__ ,TargetType);
         exit(0);

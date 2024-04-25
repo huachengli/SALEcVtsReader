@@ -44,6 +44,14 @@ typedef struct
 
 } Citcom2dXX;
 
+typedef struct
+{
+    unsigned long n;
+    VTSDATAFLOAT * pos;
+    VTSDATAFLOAT * pos2;
+} SALEc2dProfile;
+
+
 
 void Load2dInpInfo(SALEcData * _sdata,SALEcPlanetInfo * _pdata,const char* _inputName);
 void Reset2dZcoord(SALEcData * _sdata);
