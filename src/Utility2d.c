@@ -4,6 +4,7 @@
 
 #include "Utility2d.h"
 
+#define DEBUG_UTILITY2D 0
 
 void Load2dInpInfo(SALEcData * _sdata,SALEcPlanetInfo * _pdata,const char* _inputName)
 {
@@ -419,6 +420,12 @@ void LoadVts2dData(SALEcData * _sdata,const char * _vtsPrefix)
         {
             fprintf(stdout,"cannot open %s\n",VtsName);exit(0);
         }
+
+        if(DEBUG_UTILITY2D)
+        {
+            fprintf(stdout,"%s:load %s\n",__func__,VtsName);
+        }
+
         VtsLoad(_sdata->VSF+k,fp);
 
 #pragma omp critical
@@ -497,6 +504,8 @@ VTSDATAFLOAT* Vtm2dGetCellData(SALEcData * _sdata, unsigned long k, unsigned lon
     BlockId[2] = 0;
     BlockOffset[2] = 0;
 
-    unsigned long LId = BlockId[0] + _sdata->Npgx[0]*(BlockId[1] + _sdata->Npgx[1]*BlockId[2]);
+    // unsigned long LId = BlockId[0] + _sdata->Npgx[0]*(BlockId[1] + _sdata->Npgx[1]*BlockId[2]);
+    unsigned long LId = BlockId[1] + _sdata->Npgx[1]*(BlockId[0] + _sdata->Npgx[0]*BlockId[2]);
+//    fprintf(stdout,"%d(%d,%d);(%d,%d)\n",LId,BlockId[0],BlockId[1],BlockOffset[0],BlockOffset[1]);
     return Vts2dGetCellData(_sdata->VSF+LId,k,BlockOffset[0],BlockOffset[1]);
 }
