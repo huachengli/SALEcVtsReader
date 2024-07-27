@@ -83,7 +83,11 @@ int main(int argc,char * argv[])
     }
 
     CleanSALEcData(SaleData);
+    Clean2dProfile(&profile);
     free(SaleData);
+
+    // logs
+    fprintf(stdout,"write profile[%d] to %s\n",Expstep,o_set_name);
     return 0;
 }
 
