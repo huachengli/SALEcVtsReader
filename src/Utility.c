@@ -167,6 +167,10 @@ void SetMeshCLC(SALEcData * _sdata,Plane * _out,unsigned int px,unsigned py)
 void SetPlaneMesh(SALEcData * _sdata, Plane * _out, void (*_set)(SALEcData * ,Plane * ,unsigned int ,unsigned int))
 {
     // before this function Plane.n and Plane.d is known
+    /*
+     * the plane normal vector is (nx,ny,nz),
+     * the vector of grid base is (1,0,-nx/nz) and (0,1,-ny/nz), if nz != 0.
+     */
     v_normalize(_out->n);
     VTSDATAFLOAT nx,ny,nz;
     unsigned int px,py,pz;
@@ -321,7 +325,6 @@ void SetPlaneMask(SALEcData * _sdata, Plane * _out,int (*_search)(VtsInfo *, VTS
     {
         for(int jy=0;jy<_out->nCL[1];jy++)
         {
-//            VTSDATAFLOAT ptmp[3];
             VTSDATAFLOAT * ptmp = _out->coord[ix][jy];
             v_copy(ptmp,_out->X0);
             v_add_liner(ptmp,_out->CL[0][ix]-_out->CL[0][0],_out->nX[0],_out->CL[1][jy]-_out->CL[1][0],_out->nX[1]);
