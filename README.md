@@ -1,3 +1,16 @@
+##### [UPDATING]: add VtpTracer.c (30/07/2024)
+analysis 2d crater tracers from vtp data
+usage:
+
+    -d [data directory]
+        set the datafile directoty, DEFAULT is current path
+    -f [input file name]
+        set the *.inp file name, DEFAULT is sale2d.inp
+    -v 
+        convert the vtp tracers info to vts data
+    -n 
+        the max step
+
 ##### [UPDATING]: add Vts2dProfile (26/04/2024)
 extract 2d crater profile from vts/vtm data
 usage:

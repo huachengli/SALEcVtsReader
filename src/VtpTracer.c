@@ -21,7 +21,7 @@ int main(int argc,char * argv[])
     int c;
     int write_vts = 0;
     opterr = 0;
-    while ((c = getopt (argc, argv, "n:v:i:d:")) != -1)
+    while ((c = getopt (argc, argv, "n:v:f:d:")) != -1)
     {
         switch (c)
         {
@@ -31,7 +31,7 @@ int main(int argc,char * argv[])
             case 'v':
                 write_vts = atoi(optarg);
                 break;
-            case 'i':
+            case 'f':
                 strcpy(data_inp,optarg);
                 break;
             case 'd':
