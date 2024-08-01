@@ -1,7 +1,31 @@
+##### [UPDATING]: add SALEcVtsSlice
+direct export slice of 3d output to vts files
+usage:
+
+    $./SALEcVtsReader ./plane.plot
+example of input
+```shell
+[SALEc]
+    input = /home/huacheng/Documents/Github/data/pdata/SALEc_20.inp
+    step  = [1,1]
+
+[Plane]
+    data = /home/huacheng/Documents/Github/data/pdata/Al1100Test
+    step = [range,1,2,1]
+    output = Slice
+   
+    number = 2
+    name = [xoz,xoy]
+    nx = [0.0, 0.0]
+    ny = [1.0, 0.0]
+    nz = [0.0, 1.0]
+    d  = [0.0, 0.0]
+```
+
 ##### [UPDATING]: add VtpTracer.c (30/07/2024)
 analysis 2d crater tracers from vtp data
 usage:
-
+    $VtpTracer -[option] [option args]
     -d [data directory]
         set the datafile directoty, DEFAULT is current path
     -f [input file name]

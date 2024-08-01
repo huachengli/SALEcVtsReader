@@ -17,6 +17,7 @@ SET(VTP_SRCS src/VtpReader.c
 
 SET(CITCOMS_SRCS src/Utility2d.c)
 add_executable(SALEcVtsReader src/main.c  ${SRCS})
+add_executable(SALEcVtsSlice src/SliceFilter.c ${SRCS} ${VTP_SRCS})
 add_executable(Remnant src/remnant.c ${SRCS})
 add_executable(TracerView src/Tracer.c ${SRCS} src/TracerReader.c src/TracerReader.h src/AVLTree.c src/AVLTree.h)
 add_executable(VtpTracer src/VtpTracer.c ${SRCS} ${VTP_SRCS} )

@@ -27,9 +27,9 @@ int main(int argc,char * argv[])
     InputFile * ifp = OpenInputFile(get_plane);
     char SALEcInpName[200],DataPrefix[200],DataPath[400],OutPrexfix[200],VacuumName[200];
 
-    GetValueS(ifp,"Plane.data",DataPrefix,"Al1100Test");
+    GetValueS(ifp,"Slice.data",DataPrefix,"Al1100Test");
     GetValueS(ifp,"SALEc.input",SALEcInpName,"SALEc.inp");
-    GetValueS(ifp,"Plane.output",OutPrexfix,"SLICE");
+    GetValueS(ifp,"Slice.output",OutPrexfix,"SLICE");
     GetValueS(ifp,"Plane.Vacuum",VacuumName,"VOF-0");
 
     int MinStep = GetValueIk(ifp,"SALEc.step",0,"1");
@@ -50,7 +50,7 @@ int main(int argc,char * argv[])
         vn[k][2] = GetValueDk(ifp, "Slice.nz", k, "0.0");
         vd[k] = GetValueDk(ifp,"Slice.d",k,"0.0");
 
-        SliceNum[k] = (char*) malloc(sizeof(char)*MaxStrLen);
+        SliceName[k] = (char*) malloc(sizeof(char)*MaxStrLen);
         GetValueSk(ifp,"Slice.name",SliceName[k],k,"XOY");
     }
 
@@ -59,9 +59,9 @@ int main(int argc,char * argv[])
     GetValueSk(ifp,"Slice.step",StepOpt,0,"range");
     if(strcasecmp(StepOpt,"range")==0)
     {
-        int StepList0 = GetValueIk(ifp,"Plane.step",1,"0");
-        int StepList1 = GetValueIk(ifp,"Plane.step",2,"0");
-        int StepList2 = GetValueIk(ifp,"Plane.step",3,"1");
+        int StepList0 = GetValueIk(ifp,"Slice.step",1,"0");
+        int StepList1 = GetValueIk(ifp,"Slice.step",2,"0");
+        int StepList2 = GetValueIk(ifp,"Slice.step",3,"1");
         StepNum = (StepList1 - StepList0-1)/StepList2 + 1;
         StepList = (int *) malloc(sizeof(int)*StepNum);
         for(int istep=0;istep<StepNum;istep++)
@@ -95,17 +95,9 @@ int main(int argc,char * argv[])
             v_copy(OutSlice[k].n,vn[k]);
             SetPlaneMeshV(SaleData,(Plane *)(OutSlice + k));
             SetSliceMask(SaleData,OutSlice+k,OffsetSerchV);
-            GetSliceData(SaleData,OutSlice+k);
-
             char SliceOutName[MaxStrLen*4];
             sprintf(SliceOutName, "%s.%02d%s.%d.vts", OutPrexfix, k,SliceName[k],CurrentStep);
-
-
-
-            WritePlaneDataAll(Out+k, SliceOutName);
-            sprintf(SliceOutName, "%s.coord.step.%d.%d", OutPrexfix, CurrentStep, k);
-            WritePlaneCoord(Out+k, SliceOutName);
-            fprintf(stdout, "==>Write %s\n", SliceOutName);
+            WriteSliceDataAll(SaleData,OutSlice+k,SliceOutName);
             CleanSlice(OutSlice+k);
         }
         CleanSALEcData(SaleData);
@@ -127,7 +119,6 @@ int GetSliceDataC(SALEcData * _sdata, SliceFilter * _out, unsigned long Id)
     VtsInfo * _vsf = _sdata->VSF;
     _out->Id = Id;
     if(Id > _vsf->CellNoF) return 0;
-    fprintf(stdout,"(%s)",_vsf->CellField[Id].Name);
     _out->NoC = _vsf->CellField[_out->Id].NoC;
     if(NULL != _out->data_vars)
     {
@@ -138,7 +129,8 @@ int GetSliceDataC(SALEcData * _sdata, SliceFilter * _out, unsigned long Id)
     {
         for(unsigned long jy=0;jy<_out->nCL[1];jy++)
         {
-            _out->data[ix][jy] =  _out->data_vars + (ix*_out->nCL[1] + jy)*(_out->NoC);
+            // column array
+            _out->data[ix][jy] =  _out->data_vars + (ix + jy*_out->nCL[0])*(_out->NoC);
         }
     }
 
@@ -201,7 +193,7 @@ int GetSliceDataC(SALEcData * _sdata, SliceFilter * _out, unsigned long Id)
     }
 }
 
-#define SAFEFREE(x) if(NULL!=(x)) free(x);
+#define SAFEFREE(x) if(NULL!=(x)) {free(x); x=NULL;}
 void CleanSlice(SliceFilter * _out)
 {
     for(int k=0;k<_out->nCL[0];++k)
@@ -216,7 +208,7 @@ void CleanSlice(SliceFilter * _out)
         SAFEFREE(_out->offset[k])
         SAFEFREE(_out->weight[k])
     }
-    SAFEFREE(_out->scores)
+
     SAFEFREE(_out->mask)
     SAFEFREE(_out->offset)
     SAFEFREE(_out->weight)
@@ -248,7 +240,8 @@ void SetSliceMask(SALEcData * _sdata, SliceFilter * _out,int (*_search)(VtsInfo 
         {
             _out->offset[k][j] = (int *) malloc(sizeof(int)*(VTSDIM+1));
             _out->weight[k][j] = (VTSDATAFLOAT *) malloc(sizeof(VTSDATAFLOAT)*(VTSDIM));
-            _out->coord[k][j] = _out->data_coord + (k*_out->nCL[1] + j)*VTSDIM;
+            // column array (k is x-index, j is y-index)
+            _out->coord[k][j] = _out->data_coord + (k + j*_out->nCL[0])*VTSDIM;
         }
     }
 
@@ -281,22 +274,23 @@ int WriteSliceDataAll(SALEcData * _sdata, SliceFilter * _out, const char * _out_
     FILE * fp = fopen(_out_name,"w");
     if(fp == NULL)
     {
-        fprintf(stdout,%s:cannot open %s\n,__func__,_out_name);
+        fprintf(stdout,"%s:cannot open %s\n",__func__,_out_name);
         return 0;
     }
     fprintf(stdout, "==>Write %s\n", _out_name);
 
     char whole_extent[4096], piece_extent[4096];
-    snprintf(whole_extent,4096,"%d %lu %d %lu 0 0",1,_out->shape[0]+1,1,_out->shape[1]+1);
-    snprintf(piece_extent,4096,"%d %lu %d %lu 0 0",1,_out->shape[0]+1,1,_out->shape[1]+1);
+    snprintf(whole_extent,4096,"%d %lu %d %lu 0 0",1,_out->shape[0],1,_out->shape[1]);
+    snprintf(piece_extent,4096,"%d %lu %d %lu 0 0",1,_out->shape[0],1,_out->shape[1]);
     int len_pointdata = _out->shape[0]*_out->shape[1];
     int len_celldata = (_out->shape[0] - 1)*(_out->shape[1] - 1);
     vts_file_header(fp,whole_extent,piece_extent);
     vtk_point_data_header_with_attr(fp," ");
     // export point data
-    for(int k=0;k<_sdata->VSF->CellNoF;++k)
+     for(int k=0;k<_sdata->VSF->CellNoF;++k)
     {
         GetSliceDataC(_sdata,_out,k);
+        fprintf(stdout,"(%s)",_sdata->VSF->CellField[k].Name);
         vtk_dataarray_vecf(fp,_sdata->VSF->CellField[k].Name,"binary",_out->data_vars,len_pointdata,_out->NoC);
     }
     vtk_point_data_trailer(fp);
@@ -304,8 +298,9 @@ int WriteSliceDataAll(SALEcData * _sdata, SliceFilter * _out, const char * _out_
     // export cell data
     vtk_cell_data_trailer(fp);
     vtk_output_coordf(fp,"binary",_out->data_coord,len_pointdata);
+    fprintf(stdout,"(COORD)");
     vts_file_trailer(fp);
-
+    fprintf(stdout,"\n");
     fclose(fp);
     return 1;
 }
