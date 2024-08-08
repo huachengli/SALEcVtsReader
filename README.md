@@ -1,4 +1,4 @@
-##### [UPDATING]: add SALEcVtsSlice
+##### [UPDATING]: add SALEcVtsSlice (01/08/2024)
 direct export slice of 3d output to vts files
 usage:
 

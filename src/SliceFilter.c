@@ -280,7 +280,7 @@ int WriteSliceDataAll(SALEcData * _sdata, SliceFilter * _out, const char * _out_
     fprintf(stdout, "==>Write %s\n", _out_name);
 
     char whole_extent[4096], piece_extent[4096];
-    snprintf(whole_extent,4096,"%d %lu %d %lu 0 0",1,_out->shape[0],1,_out->shape[1]);
+    snprintf(whole_extent,4096,"%d %lu %d %lu 0 0",1,_out->shape[0]-1,1,_out->shape[1]-1);
     snprintf(piece_extent,4096,"%d %lu %d %lu 0 0",1,_out->shape[0],1,_out->shape[1]);
     int len_pointdata = _out->shape[0]*_out->shape[1];
     int len_celldata = (_out->shape[0] - 1)*(_out->shape[1] - 1);
