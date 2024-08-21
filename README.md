@@ -2,14 +2,14 @@
 direct export slice of 3d output to vts files
 usage:
 
-    $./SALEcVtsReader ./plane.plot
+    $./SALEcVtsSlice ./plane.plot
 example of input
 ```shell
 [SALEc]
     input = /home/huacheng/Documents/Github/data/pdata/SALEc_20.inp
     step  = [1,1]
 
-[Plane]
+[Slice]
     data = /home/huacheng/Documents/Github/data/pdata/Al1100Test
     step = [range,1,2,1]
     output = Slice

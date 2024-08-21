@@ -37,7 +37,7 @@ void LoadVtsData(SALEcData * _sdata,const char * _vtsPrefix)
 
     strcpy(_sdata->VtsPrefix,_vtsPrefix);
     int TaskFinished = 0;
-#pragma omp parallel for num_threads(12) shared(_sdata,stdout,TaskFinished) default(none)
+#pragma omp parallel for num_threads(LOADTHREADS) shared(_sdata,stdout,TaskFinished) default(none)
     for(int k=0;k<_sdata->VtsBlockNum;++k)
     {
         char VtsName[200];

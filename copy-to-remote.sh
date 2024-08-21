@@ -1,4 +1,4 @@
-#/bin/bash
+#!/bin/bash
 copy_command="rsync -avz"
 copy_args="--exclude=.* --exclude=build --exclude=cmake*  --delete --delete-excluded"
 
@@ -11,6 +11,10 @@ if [ $1 = "s13" ]; then
 	remote_code_path="s13:/home2/huachengli/${remote_proj_name}/"
 elif [ $1 = "shannon" ]; then
 	remote_code_path="shannon:/lustre/home/huachengli/${remote_proj_name}/"
+elif [ $1 = "mars" ]; then
+	remote_code_path="mars:/public3/home/spa/salecvtsreader_dev/${remote_proj_name}/"
+elif [ $1 = "crater" ]; then
+	remote_code_path="crater:/public/home/huachengli/${remote_proj_name}/"
 else
 	echo "USE DEFAULT SERVER"
 fi

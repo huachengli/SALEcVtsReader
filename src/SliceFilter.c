@@ -284,7 +284,7 @@ int WriteSliceDataAll(SALEcData * _sdata, SliceFilter * _out, const char * _out_
     snprintf(piece_extent,4096,"%d %lu %d %lu 0 0",1,_out->shape[0],1,_out->shape[1]);
     int len_pointdata = _out->shape[0]*_out->shape[1];
     int len_celldata = (_out->shape[0] - 1)*(_out->shape[1] - 1);
-    vts_file_header(fp,whole_extent,piece_extent);
+    vts_file_header(fp,piece_extent,whole_extent);
     vtk_point_data_header_with_attr(fp," ");
     // export point data
      for(int k=0;k<_sdata->VSF->CellNoF;++k)

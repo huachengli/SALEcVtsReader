@@ -555,3 +555,33 @@ void vtk_point_data_header_with_attr(FILE *fp, const char * attr)
 {
     fprintf(fp,"      <PointData %s >\n",attr);
 }
+
+void vtk_point_data_header(FILE *fp)
+{
+    fputs("      <PointData>\n", fp);
+}
+
+void vtk_dataarray_vec_f(FILE *fp, const char * name, const char * vtk_format, const float * dataarray, int len_dataarray, int n_component)
+{
+    float* floattemp = (float *)malloc(len_dataarray*sizeof(float)*n_component);
+    fprintf(fp, "        <DataArray type=\"Float32\" Name=\"%s\" NumberOfComponents=\"%d\" format=\"%s\">\n", name,n_component,vtk_format);
+    for(int i=0;i < len_dataarray*n_component;i++)
+        floattemp[i] =  (float) dataarray[i];
+
+    if(0==strcmp(vtk_format,"binary"))
+        write_binary_array(len_dataarray*n_component,floattemp,fp);
+    else
+        write_ascii_array(len_dataarray*n_component,n_component,floattemp,fp);
+    fputs("        </DataArray>\n", fp);
+    free(floattemp);
+}
+
+void vtk_point_header(FILE *fp)
+{
+    fputs("      <Points>\n", fp);
+}
+
+void vtk_point_trailer(FILE *fp)
+{
+    fputs("      </Points>\n", fp);
+}

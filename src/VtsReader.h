@@ -31,6 +31,7 @@
 #define SALEC_VTS_CELLDATA 25
 #define SALEC_VTS_POINTS 29
 #define SALEC_VTS_NONE 0
+#define LOADTHREADS 64
 
 typedef struct
 {
