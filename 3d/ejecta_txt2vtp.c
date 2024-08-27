@@ -73,6 +73,7 @@ int main(int argc,char * argv[])
     }
     fprintf(stdout,"\n %d ejecta detected\n",EC.len);
     ejecta_collect_test_clean(&EC);
+    free(export_steps);
     CloseInputFile(ifp);
     return 1;
 }

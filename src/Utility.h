@@ -23,7 +23,6 @@ typedef struct
     unsigned long nBCLV[VTSDIM];
     unsigned long nBCLC[VTSDIM];
 
-
     VtsInfo * VSF;
 } SALEcData;
 
@@ -133,7 +132,7 @@ VTSDATAFLOAT* VtmGetCellData(SALEcData * _sdata, unsigned long k, unsigned long 
     for(int _vk=0;_vk<(nx);_vk++) \
     {\
         fprintf(stdout,"%10.6f,",(x)[_vk]);\
-        if(k%(t)==(t-1)) fprintf(stdout,"\n");\
+        if(_vk%(t)==(t-1)) fprintf(stdout,"\n");\
     }                                            \
     fprintf(stdout,"\n###END###\n");     \
     }while(0);
