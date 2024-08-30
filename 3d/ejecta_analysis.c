@@ -106,10 +106,10 @@ int ejecta_collect_init(ejecta_collect * _ec, InputFile * ifp)
     _ec->nproc = npgx*npgy*npgz;
     CloseInputFile(sifp);
 
-    GetValueS(ifp,"Tracer.data",_ec->prefix,"bm");
+    GetValueS(ifp,"Ejecta.data",_ec->prefix,"bm");
     _ec->max_step = GetValueIk(ifp,"SALEc.step",1,"0");
     _ec->min_step = GetValueIk(ifp,"SALEc.step",0,"1");
-    GetValueS(ifp,"Tracer.output",_ec->output,"test");
+    GetValueS(ifp,"Ejecta.output",_ec->output,"test");
     strcat(_ec->output,".vtp");
     _ec->len_allocated = 1024;
     _ec->data = malloc(sizeof(ejecta_t)*_ec->len_allocated);

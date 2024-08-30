@@ -18,11 +18,11 @@ int main(int argc,char * argv[])
         default:
             fprintf(stdout,"error in command line\n");
     }
-
     InputFile * ifp = OpenInputFile(inp_file);
     citcoms_dump * cdp = InitCitcomsDump(ifp);
     SALEcData * sdp = CrInitSALEcData(ifp);
     UpdateCitcomsDump(cdp,sdp);
+    WriteCitcomsDump(cdp);
     CrCloseSALEcData(sdp);
     CloseCitcomsDump(cdp);
     CloseInputFile(ifp);

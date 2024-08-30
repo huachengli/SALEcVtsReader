@@ -31,14 +31,14 @@ int main(int argc,char * argv[])
     ejecta_collect_init(&EC,ifp);
 
     char ExportStepOpt[4096];
-    GetValueSk(ifp,"Tracer.step",ExportStepOpt,0,"Range");
+    GetValueSk(ifp,"Ejecta.step",ExportStepOpt,0,"Range");
     int * export_steps;
     int num_export_steps;
     if(strcasecmp(ExportStepOpt,"range") == 0)
     {
-        int s_step = GetValueIk(ifp,"Tracer.step",1,"0");
-        int e_step = GetValueIk(ifp,"Tracer.step",2,"0");
-        int interval = GetValueIk(ifp,"Tracer.step",3,"0");
+        int s_step = GetValueIk(ifp,"Ejecta.step",1,"0");
+        int e_step = GetValueIk(ifp,"Ejecta.step",2,"0");
+        int interval = GetValueIk(ifp,"Ejecta.step",3,"0");
         assert(s_step < e_step && interval > 0);
         num_export_steps = (e_step - s_step)/interval + 1;
         export_steps = malloc(sizeof(int)*num_export_steps);

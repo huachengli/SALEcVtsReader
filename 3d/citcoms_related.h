@@ -60,9 +60,15 @@ SALEcData * CrInitSALEcData(InputFile * ifp);
 void CrCloseSALEcData(SALEcData * _sdata);
 
 int UpdateCitcomsTempDump(citcoms_dump * _cd, SALEcData * _sdata);
-int UpdateCitcomsTracerDump(citcoms_dump * _cd, SALEcData * _sdtat);
+int UpdateCitcomsTracerDump(citcoms_dump * _cd, SALEcData * _sdata);
 int UpdateCitcomsDump(citcoms_dump * _cdp, SALEcData * _sdata);
 int SALEcGetCData(SALEcData * _sdata, int fId, VTSDATAFLOAT * _pos, VTSDATAFLOAT * _data);
+int SALEcGetCDataN(SALEcData * _sdata, int *fId, int length, VTSDATAFLOAT * _pos, VTSDATAFLOAT * _data);
+int WriteCitcomsDump(citcoms_dump * _cdp);
 
 void citcoms_tracer_dump_vtp(citcoms_tracer_dump * _ctd, const char * name);
+void citcoms_tracer_dump_pvtp(citcoms_dump * _cdp, const char * name);
+
+int write_citcoms_temp_dump(citcoms_temp_dump * _ctd, const char * fname);
+int write_citcoms_tracer_dump(citcoms_tracer_dump * _ctd, const char * fname);
 #endif //SALECVTSREADER_CITCOMS_RELATED_H
