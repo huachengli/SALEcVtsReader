@@ -21,10 +21,14 @@ int main(int argc,char * argv[])
     InputFile * ifp = OpenInputFile(inp_file);
     citcoms_dump * cdp = InitCitcomsDump(ifp);
     SALEcData * sdp = CrInitSALEcData(ifp);
-    UpdateCitcomsDump(cdp,sdp);
-    WriteCitcomsDump(cdp);
+    SALEcData * sdr = CrInitSALEcData_ref(ifp);
+    UpdateCitcomsDump(cdp,sdp,sdr);
     CrCloseSALEcData(sdp);
+    CrCloseSALEcData(sdr);
+    WriteCitcomsDump(cdp);
     CloseCitcomsDump(cdp);
+
+    // sleep(60);
     CloseInputFile(ifp);
     return 0;
 }

@@ -501,7 +501,8 @@ void MergeBlockC(SALEcData * _sdata,int * indices)
 #define SAFEFREE(x) if(NULL!=(x)) free(x);
 void CleanSALEcData(SALEcData * _sdata)
 {
-
+    if(NULL == _sdata)
+        return;
     for(int k=0;k<VTSDIM;++k)
     {
         SAFEFREE(_sdata->GCLV[k])

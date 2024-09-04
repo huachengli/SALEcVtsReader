@@ -61,7 +61,6 @@ int load_ejecta_collect_single_file(ejecta_collect * _ec, const char * _tmp_name
     return new_ejecta_num;
 }
 
-
 int ejecta_collect_push(ejecta_collect * _ec, ejecta_t * _e)
 {
     if(_ec->len < 0) return 0;

@@ -48,7 +48,7 @@ void VtpTagDataArrayProcess(const char* _values,VtpFile * _vfp)
             break;
         default:
             _vdp = NULL;
-            fprintf(stdout,"unknown DataNodeTye!\n");
+            fprintf(stdout,"%s:unknown DataNodeTye!\n",__func__ );
             exit(0);
             break;
     }

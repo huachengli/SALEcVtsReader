@@ -44,7 +44,6 @@ int main(int argc,char * argv[])
         fprintf(stdout,"[%d]:%f\n",k, CompareTracerFile(pTracer[k],cTracer[k]));
         if(k>0)
         fprintf(stdout,"[%d+]:%f\n",k, CompareTracerFile(pTracer[k-1],cTracer[k]));
-
     }
 
     // check the instance

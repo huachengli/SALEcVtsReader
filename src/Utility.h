@@ -127,6 +127,9 @@ VTSDATAFLOAT* VtmGetCellData(SALEcData * _sdata, unsigned long k, unsigned long 
 #define _lId3(x,y,z,nx,ny,nz) ((x)+(nx)*((y)+(ny)*(z)))
 #define _lId2(x,y,nx,ny) ((x)+(nx)*(y))
 
+#define MIN(i, j) (((i) < (j)) ? (i) : (j))
+#define MAX(i, j) (((i) > (j)) ? (i) : (j))
+
 #define print_vec(x,nx,t) do{\
     fprintf(stdout,"\n###START###\n");   \
     for(int _vk=0;_vk<(nx);_vk++) \

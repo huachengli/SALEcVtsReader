@@ -157,7 +157,6 @@ void VtsLoad(VtsInfo * _vfp,FILE * fp)
     VtsFrameHeadLoad(_vfp,fp);
     while(VtsFrameLoad(_vfp,fp))
     {
-//        fprintf(stdout,"$\n");
         VtsStackFrame * _vsf = _vfp->StackPos - 1 + _vfp->VtsStack;
         if(_vsf->Tag == SALEC_VTS_DATAARRAY)
         {
@@ -277,7 +276,6 @@ void VtsInfoClean(VtsInfo * _vsf)
     unsigned int nx0 = _vsf->PieceExtent[0][1]-_vsf->PieceExtent[0][0]+1;
     unsigned int nx1 = _vsf->PieceExtent[1][1]-_vsf->PieceExtent[1][0]+1;
     unsigned int nx2 = _vsf->PieceExtent[2][1]-_vsf->PieceExtent[2][0]+1;
-
 
     for(int xi2=0;xi2<nx2;++xi2)
     {

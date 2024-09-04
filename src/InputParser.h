@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define MaxStrLen   100
+#define MaxStrLen   4096
 #define MaxKeyId    200
 
 typedef struct {

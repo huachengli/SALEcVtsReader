@@ -47,7 +47,9 @@ typedef struct TracerFileCollectDef
 {
     VtpFile ** vtp;
     int NoF;
-    const char Name[MaxStrLen];
+    char Name[MaxStrLen];
+    char prefix[MaxStrLen];
+    int step;
 } VtpTracerCollect;
 
 typedef struct name2data
@@ -57,12 +59,19 @@ typedef struct name2data
 } Name2VtpData;
 
 VtpTracerCollect * OpenVtpTracerCollect(const char * _prefix, int _nof);
+VtpTracerCollect * OpenSALEcTracerCollect(InputFile * ifp, int step);
 VtpTracerCollect * FlushVtpTracerCollect(GridTracer * gtf,const char * _prefix, int _nof);
 int CloseVtpTracerCollect(VtpTracerCollect * _vtc);
+int ShowBriefVtpFile(VtpFile * vfp, FILE * fp);
+int ShowBriefVtpColleect(VtpTracerCollect * vtc, FILE * fp);
+VtpFile * SALEcVtpCollectFilter(VtpTracerCollect * vtc);
 int InitGridTracer(GridTracer * gtf,InputFile * ifp);
 int LoadGridTxtFile(GridTracer * gtf,const char * fname);
 int FlushGridTracerFromVtp(GridTracer * gtf, VtpFile * vfp);
 int FlushGridTracerFromVtpCollect(GridTracer * gtf, VtpTracerCollect * tvtcp);
 int WriteGridTracer(GridTracer * gtf, const char * vts_name);
 int ExportGridTracerF32Bin(GridTracer * gtf, const char * binprefix);
+unsigned long find_vtpfield(const char * _src, VtpFile * vfp);
+VtpFile * duplicate_vtp(VtpFile * in, unsigned long n);
+int copy_vtp_k(VtpFile * x, unsigned long px, VtpFile * y, unsigned long  py);
 #endif //SALECVTSREADER_VTPTRACER_H

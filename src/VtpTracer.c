@@ -12,84 +12,6 @@
 #include <unistd.h>
 #define MAXNAMELEN 4096
 
-int main(int argc,char * argv[])
-{
-    char data_inp[MAXNAMELEN] = "sale2d.inp";
-    char data_dir[MAXNAMELEN] = ".";
-    int maxstep = 5;
-
-    int c;
-    int write_vts = 0;
-    opterr = 0;
-    while ((c = getopt (argc, argv, "n:v:f:d:")) != -1)
-    {
-        switch (c)
-        {
-            case 'n':
-                maxstep = atoi(optarg);
-                break;
-            case 'v':
-                write_vts = atoi(optarg);
-                break;
-            case 'f':
-                strcpy(data_inp,optarg);
-                break;
-            case 'd':
-                strcpy(data_dir,optarg);
-                break;
-            case '?':
-                if(optopt == 'c')
-                    fprintf (stderr, "Option -%c requires an argument.\n", optopt);
-                else if (isprint (optopt))
-                    fprintf (stderr, "Unknown option `-%c'.\n", optopt);
-                else
-                    fprintf (stderr,"Unknown option character `\\x%x'.\n",optopt);
-                return 1;
-            default:
-                abort ();
-        }
-    }
-
-
-    char inp_path[MAXNAMELEN*2] = "";
-    snprintf(inp_path,MAXNAMELEN*2,"%s/%s",data_dir,data_inp);
-    GridTracer gTracer;
-    GridTracer * gTracer_ptr = &gTracer;
-    InputFile * data_ifp = OpenInputFile(inp_path);
-    InitGridTracer(gTracer_ptr,data_ifp);
-    CloseInputFile(data_ifp);
-
-    char data_name[MAXNAMELEN*2];
-    // load initial position
-    snprintf(data_name,MAXNAMELEN*2,"%s/txt/grid.txt",data_dir);
-    LoadGridTxtFile(gTracer_ptr,data_name);
-
-    for(int step=0;step<maxstep;++step)
-    {
-        fprintf(stdout,"processing step %d (",step);
-        gTracer.step = step;
-        snprintf(data_name, MAXNAMELEN*2, "%s/vtp/%s.tracer.proc%%04d.%04d.vtp", data_dir, gTracer.prefix, step);
-        VtpTracerCollect * tfcp = FlushVtpTracerCollect(gTracer_ptr,data_name, gTracer.nvtp);
-        // FlushGridTracerFromVtpCollect(gTracer_ptr,tfcp);
-        char post_vts_name[MAXNAMELEN*2];
-        snprintf(post_vts_name, MAXNAMELEN*2, "%s/post/%s.post.%04d.vts", data_dir, gTracer.prefix, step);
-
-        if(write_vts > 0 && step%write_vts == 0)
-        {
-            WriteGridTracer(gTracer_ptr,post_vts_name);
-            fprintf(stdout," post/vts ");
-        }
-
-        snprintf(post_vts_name, MAXNAMELEN*2, "%s/post/%s", data_dir, gTracer.prefix);
-        fprintf(stdout," post/bin ");
-        ExportGridTracerF32Bin(gTracer_ptr,post_vts_name);
-        CloseVtpTracerCollect(tfcp);
-        fprintf(stdout,")\n");
-    }
-
-    return 0;
-}
-
 VtpTracerCollect * OpenVtpTracerCollect(const char * _prefix, int _nof)
 {
     VtpTracerCollect * tmp = malloc(sizeof(VtpTracerCollect));
@@ -105,6 +27,29 @@ VtpTracerCollect * OpenVtpTracerCollect(const char * _prefix, int _nof)
     return tmp;
 }
 
+VtpTracerCollect * OpenSALEcTracerCollect(InputFile * ifp, int step)
+{
+    char SALEcInp[4096];
+    GetValueS(ifp,"SALEc.input",SALEcInp,"SALEc.inp");
+    InputFile * sifp = OpenInputFile(SALEcInp);
+    int npgx = GetValueI(sifp,"processor.npgx","2");
+    int npgy = GetValueI(sifp,"processor.npgy","2");
+    int npgz = GetValueI(sifp,"processor.npgz","1");
+    int _nof = npgx*npgy*npgz;
+    CloseInputFile(sifp);
+
+    char _prefix[MAXNAMELEN];
+    GetValueS(ifp,"tracer.data",_prefix,"bm");
+
+    char tmp_prefix[MAXNAMELEN*2];
+    snprintf(tmp_prefix,MAXNAMELEN*2-1,"%s.proc%%d.%d.vtp",_prefix,step);
+
+    VtpTracerCollect * x =  OpenVtpTracerCollect(tmp_prefix,_nof);
+    x->step = step;
+    return x;
+}
+
+
 int CloseVtpTracerCollect(VtpTracerCollect * _vtc)
 {
     for(int k=0;k<_vtc->NoF;++k){
@@ -115,6 +60,122 @@ int CloseVtpTracerCollect(VtpTracerCollect * _vtc)
     free(_vtc);
     return 1;
 }
+
+int ShowBriefVtpFile(VtpFile * vfp, FILE * fp)
+{
+    if(vfp==NULL)
+    {
+        return 0;
+    }
+
+    fprintf(fp,"Name:%s\n",vfp->name);
+    fprintf(fp,"  points:%d\n",vfp->NoP);
+    fprintf(fp,"Field list:\n");
+    for(int k=0;k < vfp->PointNoF;++k)
+    {
+        fprintf(fp,"%d|%s|\n",k,vfp->PointField[k].Name);
+    }
+    return vfp->NoP;
+}
+
+int ShowBriefVtpColleect(VtpTracerCollect * vtc, FILE * fp)
+{
+    fprintf(fp,"<<<<[collect]%s\n",vtc->prefix);
+    int sum_nop = 0;
+    for(int k=0;k<vtc->NoF;++k)
+    {
+        sum_nop += ShowBriefVtpFile(vtc->vtp[k],fp);
+    }
+    fprintf(fp,"%d pts\n",sum_nop);
+    fprintf(fp,">>>>[*]%s\n",vtc->prefix);
+    return sum_nop;
+}
+
+VtpFile * SALEcVtpCollectFilter(VtpTracerCollect * vtc)
+{
+
+    int sum_nop_filtered = 0;
+    unsigned long matFieldId = 100;
+    for(int k=0;k<vtc->NoF;++k)
+    {
+        if(vtc->vtp[k]->NoP == 0)
+            continue;
+        if(matFieldId == 100)
+            matFieldId = find_vtpfield("matid",vtc->vtp[k]);
+        VtpData * vtpx = vtc->vtp[k]->PointField + matFieldId;
+        for(int j=0;j<vtpx->DataLen;++j)
+        {
+            if(fabs(fabs(vtpx->Data[j]) - 1.0) < 0.1) sum_nop_filtered ++;
+        }
+    }
+
+    VtpFile * tmp = NULL;
+    unsigned long pindex = 0;
+
+    for(int k=0;k<vtc->NoF;++k)
+    {
+        if(vtc->vtp[k]->NoP == 0)
+            continue;
+
+        if(NULL == tmp) tmp = duplicate_vtp(vtc->vtp[k],sum_nop_filtered);
+        VtpFile * vtp = vtc->vtp[k];
+        VtpData * vtpx = vtc->vtp[k]->PointField + matFieldId;
+        for(int j=0;j<vtpx->DataLen;++j)
+        {
+            if(fabs(fabs(vtpx->Data[j]) - 1.0) < 0.1){
+                copy_vtp_k(tmp,pindex,vtp,j);
+                pindex++;
+            }
+        }
+    }
+    VtpCoordinateReshape(tmp);
+    return tmp;
+}
+
+unsigned long find_vtpfield(const char * _src, VtpFile * vfp)
+{
+    unsigned long result= 100;
+    for(int k=0;k<vfp->PointNoF;++k)
+    {
+        if(0== strcasecmp(_src,vfp->PointField[k].Name))
+        {
+            result = k;
+            break;
+        }
+    }
+    return result;
+}
+
+VtpFile * duplicate_vtp(VtpFile * in, unsigned long n)
+{
+    VtpFile * tmp = malloc(sizeof(VtpFile));
+    tmp->NoP = n;
+    tmp->PointNoF = in->PointNoF;
+    if(n == 0) return tmp;
+
+    for(int k=0;k<tmp->PointNoF;++k)
+    {
+        tmp->PointField[k].DataLen = in->PointField[k].NoC*n;
+        tmp->PointField[k].NoC = in->PointField[k].NoC;
+        tmp->PointField[k].Data =  malloc(sizeof(VTSDATAFLOAT)*tmp->PointField[k].DataLen);
+        strcpy(tmp->PointField[k].Name,in->PointField[k].Name);
+        strcpy(tmp->PointField[k].Type,in->PointField[k].Type);
+        strcpy(tmp->PointField[k].Format,in->PointField[k].Format);
+    }
+    return tmp;
+}
+
+int copy_vtp_k(VtpFile * x, unsigned long px, VtpFile * y, unsigned long  py)
+{
+    if(x->PointNoF != y->PointNoF) return 0;
+    for(int k=0;k<x->PointNoF;++k)
+    {
+        memcpy(x->PointField[k].Data + px*x->PointField[k].NoC,
+               y->PointField[k].Data + py*y->PointField[k].NoC, sizeof(VTSDATAFLOAT)*x->PointField[k].NoC);
+    }
+    return 1;
+}
+
 
 int InitGridTracer(GridTracer * gtf,InputFile * ifp)
 {
@@ -354,6 +415,7 @@ int FlushGridTracerFromVtpCollect(GridTracer * gtf, VtpTracerCollect * tvtcp)
     {
         FlushGridTracerFromVtp(gtf,tvtcp->vtp[k]);
     }
+    return 0;
 }
 
 int WriteGridTracer(GridTracer * gtf, const char * vts_name)

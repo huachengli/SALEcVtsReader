@@ -88,8 +88,6 @@ Tracer * OpenTracerFile(const char * fname)
     return _tracer;
 }
 
-
-
 void CloseTracerFile(Tracer * _tracer)
 {
     free(_tracer->node);

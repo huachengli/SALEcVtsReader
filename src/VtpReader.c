@@ -3,6 +3,7 @@
 //
 
 #include "VtpReader.h"
+#include "VtkWriter.h"
 
 void VtpLoad(VtpFile * _vfp, FILE *fp)
 {
@@ -15,6 +16,11 @@ void VtpLoad(VtpFile * _vfp, FILE *fp)
         if(_vsf->Tag == SALEC_VTP_DataArray)
         {
             ReadVtsBinaryF32(&(_vfp->ActiveData->Data), &(_vfp->ActiveData->DataLen), fp);
+        }
+
+        if(_vsf->Tag == SALEC_VTP_Piece && _vfp->NoP == 0)
+        {
+            break;
         }
     }
     VtpCoordinateReshape(_vfp);
@@ -117,20 +123,48 @@ int VtpCoordinateReshape(VtpFile * _vsf)
 
     if(k==_vsf->PointNoF)
     {
-        fprintf(stdout,"No coordinate information in the vts!\n");
+        if(_vsf->NoP == 0) return 0;
+        fprintf(stdout,"No coordinate information in the vtp!\n");
+        return -1;
     }
-    VTSDATAFLOAT * PointData = _vsf->PointField[k].Data;
-    unsigned long PointDataLen = _vsf->PointField[k].DataLen;
-
-    if(_vsf->NoP*VTPDIM!=PointDataLen)
+    else
     {
-        fprintf(stdout,"number of coordinates is %ld, but %d is wanted\n",PointDataLen,_vsf->NoP*VTPDIM);
-        exit(0);
-    }
+        VTSDATAFLOAT * PointData = _vsf->PointField[k].Data;
+        unsigned long PointDataLen = _vsf->PointField[k].DataLen;
 
-    // set Points ptr
-    _vsf->Point = PointData;
-    return (int) PointDataLen;
+        if(_vsf->NoP*VTPDIM!=PointDataLen)
+        {
+            fprintf(stdout,"number of coordinates is %ld, but %d is wanted\n",PointDataLen,_vsf->NoP*VTPDIM);
+            exit(0);
+        }
+        // set Points ptr
+        _vsf->Point = PointData;
+        return (int) PointDataLen;
+    }
+}
+
+int WriteVtpFile(VtpFile * _vsf)
+{
+    FILE * fp = fopen(_vsf->name,"w");
+    vtp_file_header(fp,_vsf->NoP);
+    vtk_point_data_header(fp);
+
+    for(int k=0;k<_vsf->PointNoF;++k)
+    {
+        VtpData * _vdk = _vsf->PointField + k;
+        if(strcasecmp(_vdk->Name,"coordinate") == 0)
+            continue;
+
+        vtk_dataarray_vec_f(fp,_vdk->Name,_vdk->Format,_vdk->Data,_vdk->DataLen/_vdk->NoC,_vdk->NoC);
+    }
+    vtk_point_data_trailer(fp);
+    vtk_point_header(fp);
+    vtk_dataarray_vec_f(fp,"coordinate","binary",_vsf->Point,_vsf->NoP,3);
+    vtk_point_trailer(fp);
+    vtp_file_trailer(fp);
+    fclose(fp);
+
+    return _vsf->NoP;
 }
 
 
