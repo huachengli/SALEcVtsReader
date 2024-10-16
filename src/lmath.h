@@ -16,5 +16,13 @@ float VecMaxF(const float *x, int n);
 float VecMinF(const float *x, int n);
 double Clock(int i);
 
+double VecLen(const double *x, int n);
+double VecDot(const double *x, const double *y, int n);
+float VecDotF(const float *x, const float *y, int n);
+void VecCross(double *z, const double *x, const double *y, int n);
+void VecNormalize(double *x, int n);
+void VecLinear(double *z, const double *x, double px, const double *y, double py, int n);
+void VecAdd(double *x , const double *y, double p,int n);
+void VecD2F(float *y, const double * x, int n);
 
 #endif //SALECVTSREADER_LMATH_H

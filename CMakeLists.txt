@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.11)
 
 project(SALEcVtsReader C)
 SET(CMAKE_C_STANDARD 99)
-SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp -Wno-unused-result -O3")
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp -Wno-unused-result")
 
 LINK_LIBRARIES(z m)
 SET(SRCS src/VtsTag.c
@@ -29,4 +29,6 @@ add_executable(generateEjectaVtp 3d/ejecta_txt2vtp.c 3d/ejecta_analysis.c ${SRCS
 add_executable(txt2vts 2d/txt2vts.c ${SRCS} ${VTP_SRCS})
 add_executable(citcoms_set_dump 3d/citcoms_set_dump.c 3d/citcoms_related.c ${SRCS} ${VTP_SRCS})
 add_executable(tracer_filter 3d/tracer_filter.c ${SRCS} ${VTP_SRCS} src/VtpTracer.c)
+add_executable(citcoms_check_dump 3d/citcoms_check_find.c 3d/citcoms_related.c ${SRCS} ${VTP_SRCS})
+
 #target_compile_options(CitcomsExport PUBLIC -O0)
