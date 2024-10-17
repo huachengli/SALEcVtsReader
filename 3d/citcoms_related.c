@@ -5,6 +5,7 @@
 #include "citcoms_related.h"
 #include <omp.h>
 #include "lmath.h"
+#include "lmath3d8.h"
 #include <sys/time.h>
 
 int load_citcoms_temp_dump(citcoms_temp_dump * _ctd, const char * fname)
@@ -132,6 +133,7 @@ int load_citcoms_dump(citcoms_dump * _cd, InputFile * ifp)
     _cd->nprocz = GetValueI(ifp,"citcoms.nprocz","2");
 
     assert(_cd->nproc == _cd->nproc_surf*_cd->nprocx*_cd->nprocy*_cd->nprocz);
+    _cd->nproc_surf *= _cd->nprocx*_cd->nprocy;
 
     _cd->TransformR = GetValueD(ifp,"citcoms.TransformR","1.0");
     _cd->pad_step = _cd->TransformR/2500.0;
@@ -166,6 +168,117 @@ int clean_citcoms_dump(citcoms_dump * x)
     }
     free(x->temp);
     free(x->tracer);
+    return 0;
+}
+
+citcoms_sphere * init_citcoms_sphere(citcoms_dump * _cd, int noc)
+{
+    citcoms_sphere * _cs = (citcoms_sphere *) malloc(sizeof(citcoms_sphere));
+    assert(NULL != _cs);
+    /// copy metadata from _cd
+    _cs->nproc_surf = _cd->nproc_surf;
+    _cs->nproc = _cd->nproc;
+    _cs->nprocx = _cd->nprocx;
+    _cs->nprocy = _cd->nprocy;
+    _cs->nprocz = _cd->nprocz;
+    /// allocate memory for sphere
+    assert(noc >= 1);
+    assert(_cs->nproc_surf >= 1);
+    _cs->cap = (citcoms_sphere_dump *)malloc(sizeof(citcoms_sphere_dump)*_cs->nproc_surf);
+
+    /// allocate sphere
+    for(int k=0; k< _cs->nproc_surf; ++k)
+    {
+        const int iproc = k*_cd->nprocz + _cd->nprocz - 1;
+        const int nox = _cd->temp[iproc].nox;
+        const int noy = _cd->temp[iproc].noy;
+        const int noz = _cd->temp[iproc].noz;
+        const int nel = (nox - 1) * (noy - 1);
+        const int nno = nox * noy;
+
+        citcoms_temp_dump * _ctd = _cd->temp + iproc;
+
+        _cs->cap[k].pos = (float *) malloc(sizeof(float) * nno * 3);
+        _cs->cap[k].data = (float *) malloc(sizeof(float) * nel * noc);
+
+        _cs->cap[k].nno = nno;
+        _cs->cap[k].nel = nel;
+        _cs->cap[k].noc = noc;
+        _cs->cap[k].nox = nox;
+        _cs->cap[k].noy = noy;
+        _cs->cap[k].noz = noz;
+
+        /// copy coordinate to pos
+        const int kz = noz - 1;
+        for(int ix=0;ix<nox;++ix)
+        {
+            for(int jy=0;jy<noy;++jy)
+            {
+                const int n3 =citcoms_offset(ix+1,jy+1,kz+1,nox,noy,noz);
+                const int n2 = jy + noy*ix;
+                _cs->cap[k].pos[3*n2 + 0] = (float) _ctd->x[n3];
+                _cs->cap[k].pos[3*n2 + 1] = (float) _ctd->y[n3];
+                _cs->cap[k].pos[3*n2 + 2] = (float) _ctd->z[n3];
+            }
+        }
+        /// set initial value of data to 0.
+        for(int j=0;j<noc*nel;++j)
+            _cs->cap[k].data[j] = 0.0f;
+    }
+    return _cs;
+}
+
+int clean_citcoms_sphere(citcoms_sphere * _cs)
+{
+    for(int k=0;k<_cs->nproc_surf;++k)
+    {
+        free(_cs->cap[k].pos);
+        free(_cs->cap[k].data);
+    }
+    free(_cs->cap);
+    free(_cs);
+    return 0;
+}
+
+int write_citcoms_sphere(citcoms_sphere * _cs, const char * _name)
+{
+    char vtm_name[4097];
+    snprintf(vtm_name, 4096, "%s.vtm", _name);
+    FILE * vtm_fp = fopen(vtm_name,"w");
+    assert(vtm_fp != NULL);
+    const char header[] =
+            "<?xml version=\"1.0\"?>\n"
+            "<VTKFile type=\"vtkMultiBlockDataSet\" version=\"1.0\" compressor=\"vtkZLibDataCompressor\" byte_order=\"LittleEndian\">\n"
+            "  <vtkMultiBlockDataSet>\n";
+    fputs(header, vtm_fp);
+
+    for(int k=0; k<_cs->nproc_surf; ++k)
+    {
+        citcoms_sphere_dump * _csd = _cs->cap + k;
+        char vts_name[4097];
+        snprintf(vts_name,4096,"%s.%04d.vts",_name,k);
+        fprintf(vtm_fp, "    <DataSet index=\"%d\" file=\"%s\"/>\n",k,vts_name);
+        FILE * vts_fp = fopen(vts_name,"w");
+        assert(vts_fp != NULL);
+        char whole_extent[4096], piece_extent[4096];
+        snprintf(whole_extent, 4096, "%d %d %d %d 0 0", 1, _csd->nox, 1, _csd->noy);
+        snprintf(piece_extent, 4096, "%d %d %d %d 0 0", 1, _csd->nox, 1, _csd->noy);
+        vts_file_header(vts_fp, piece_extent, whole_extent);
+        vtk_point_data_header(vts_fp);
+        // vtk_dataarray_vec_f(vts_fp, "dump", "binary", dump, nodes, dump_len);
+        vtk_point_data_trailer(vts_fp);
+        vtk_cell_data_header(vts_fp);
+        vtk_dataarray_vec_f(vts_fp, "dump", "binary", _csd->data, _csd->nel, _csd->noc);
+        vtk_cell_data_trailer(vts_fp);
+        vtk_point_header(vts_fp);
+        vtk_dataarray_vec_f(vts_fp, "coordinate", "binary", _csd->pos, _csd->nno, 3);
+        vtk_point_trailer(vts_fp);
+        vts_file_trailer(vts_fp);
+        fclose(vts_fp);
+    }
+    fputs("  </vtkMultiBlockDataSet>\n", vtm_fp);
+    fputs("</VTKFile>", vtm_fp);
+    fclose(vtm_fp);
     return 0;
 }
 
@@ -238,7 +351,7 @@ int UpdateCitcomsTempDump(citcoms_dump * _cd, SALEcData * _sdata, SALEcData * _r
     VtsInfo * _vsf = _sdata->VSF;
     unsigned long fId= find_cellfield("Temperature",_vsf);
     unsigned long fId_vaccum = find_cellfield("VOF-0",_vsf);
-    unsigned long fId_mantle = find_cellfield("VOF-2",_vsf);
+    unsigned long fId_mantle = find_cellfield("VOF-1",_vsf);
     const unsigned long NoC = _vsf->CellField[fId].NoC;
     assert(NoC == 1);
 
@@ -319,17 +432,77 @@ int UpdateCitcomsTempDump(citcoms_dump * _cd, SALEcData * _sdata, SALEcData * _r
 }
 
 
-int VIntCitcomsTempDump(citcoms_temp_dump * _ctd, double (*f)(double *),  float * dump, int len_dump)
+int StructedGridIntf(double ** X, double * _data, int *shape, int *eid, double * res, double (*f)(double *, double *), double * ctx)
+{
+    int ien[8] = {
+            citcoms_offset(eid[1]+1,eid[2]+1,eid[3]+0,shape[0],shape[1],shape[2]),
+            citcoms_offset(eid[1]+0,eid[2]+1,eid[3]+0,shape[0],shape[1],shape[2]),
+            citcoms_offset(eid[1]+0,eid[2]+0,eid[3]+0,shape[0],shape[1],shape[2]),
+            citcoms_offset(eid[1]+1,eid[2]+0,eid[3]+0,shape[0],shape[1],shape[2]),
+            citcoms_offset(eid[1]+1,eid[2]+1,eid[3]+1,shape[0],shape[1],shape[2]),
+            citcoms_offset(eid[1]+0,eid[2]+1,eid[3]+1,shape[0],shape[1],shape[2]),
+            citcoms_offset(eid[1]+0,eid[2]+0,eid[3]+1,shape[0],shape[1],shape[2]),
+            citcoms_offset(eid[1]+1,eid[2]+0,eid[3]+1,shape[0],shape[1],shape[2]),
+    };
+
+    double Xg[8][3];
+    double Yg[8];
+    double Vg[9];
+
+    for(int k=0;k<8;++k)
+    {
+        Xg[k][0] = X[0][ien[k]];
+        Xg[k][1] = X[1][ien[k]];
+        Xg[k][2] = X[2][ien[k]];
+
+        Yg[k] = 1.0;
+        Vg[k] = 1.0;
+
+        if(NULL != f)
+        {
+            Yg[k] *= f(Xg[k], ctx);
+            Vg[k] *= f(Xg[k], ctx);
+        }
+
+        if(NULL != _data)
+        {
+            Yg[k] *= _data[ien[k]];
+        }
+    }
+
+    // res[0] = fabs(DeriveVolumeAverage(Yg,Xg));
+    // res[1] = fabs(DeriveVolume(Xg));
+    res[0] = DeriveVolumeAverage(Yg,Xg);
+    res[1] = DeriveVolumeAverage(Vg,Xg);
+    // res[1] = DeriveVolume(Xg);
+    res[2] = 0.5*(Yg[0] + Yg[6]);
+    return 2;
+}
+
+double fr(double * pos, double  *ctx)
+{
+    double r0 = VecLen(pos,3);
+    double r1 = ctx[0]/ctx[2];
+    double r2 = ctx[1]/ctx[2];
+
+    if(r0 <= r2 && r0 >= r1)
+        return 1.0;
+    else
+        return 0.0;
+}
+
+int VIntCitcomsTempDump(citcoms_temp_dump * _ctd, float * dump, int len_dump,double (*f)(double *,double *),  double * ctx)
 {
     const int nodes = _ctd->nox * _ctd->noy;
     const int elements = (_ctd->nox-1) * (_ctd->noy-1);
     /// dump should be allocated before called
-
     if(nodes == len_dump)
     {
         /// integrate along lines (z direction)
+        return 1;
     }
-    else if(elements == len_dump)
+
+    if(elements == len_dump)
     {
         /// calculate in elements
         for(int ix=0;ix<_ctd->nox-1;++ix)
@@ -337,44 +510,63 @@ int VIntCitcomsTempDump(citcoms_temp_dump * _ctd, double (*f)(double *),  float 
                 for(int kz=0; kz<_ctd->noz-1; ++kz)
                 {
                     int eid[4] = {0, ix+1, jy+1, kz+1};
-                    int _ien[8] = {
-                            citcoms_offset(eid[1]+0,eid[2]+0,eid[3]+0,_ctd->nox,_ctd->noy,_ctd->noz),
-                            citcoms_offset(eid[1]+1,eid[2]+0,eid[3]+0,_ctd->nox,_ctd->noy,_ctd->noz),
-                            citcoms_offset(eid[1]+1,eid[2]+1,eid[3]+0,_ctd->nox,_ctd->noy,_ctd->noz),
-                            citcoms_offset(eid[1]+0,eid[2]+1,eid[3]+0,_ctd->nox,_ctd->noy,_ctd->noz),
-                            citcoms_offset(eid[1]+0,eid[2]+0,eid[3]+1,_ctd->nox,_ctd->noy,_ctd->noz),
-                            citcoms_offset(eid[1]+1,eid[2]+0,eid[3]+1,_ctd->nox,_ctd->noy,_ctd->noz),
-                            citcoms_offset(eid[1]+1,eid[2]+1,eid[3]+1,_ctd->nox,_ctd->noy,_ctd->noz),
-                            citcoms_offset(eid[1]+0,eid[2]+1,eid[3]+1,_ctd->nox,_ctd->noy,_ctd->noz),
-                    };
+                    int shape[3] = {_ctd->nox, _ctd->noy, _ctd->noz};
+                    double res[3] = {0};
+                    StructedGridIntf(_ctd->X, _ctd->crust, shape, eid, res, f, ctx);
 
-
-
+                    const int n2 = jy + (_ctd->noy-1)*ix;
+                    dump[n2*3 + 0] += (float) res[0];
+                    dump[n2*3 + 1] += (float) res[1];
+                    dump[n2*3 + 2] += (float) res[2];
                 }
+        return 2;
+    }
+    return 0;
+}
 
+
+int SphereIntegrateCitcomsDump(citcoms_dump * _cd, const char * _prefix)
+{
+    /// (1) calculate integrate in r-interval,
+    /// (2) write results to vtm file
+
+    /// (1) calculate
+    const int _noc = 3;
+    citcoms_sphere * _cs = init_citcoms_sphere(_cd, _noc);
+
+    /// calculate volume of crust between ctx[0], ctx[1]
+    const double depth = 400.0e3;
+    const double Rm = _cd->TransformR;
+    double ctx[] = {Rm - depth, Rm, Rm};
+
+    for(int k=0; k<_cd->nproc; ++k)
+    {
+        citcoms_temp_dump * _ctd = _cd->temp + k;
+        const int cap_id = k/ _cd->nprocz;
+        VIntCitcomsTempDump(_ctd, _cs->cap[cap_id].data, _cs->cap[cap_id].nel,fr, ctx);
     }
 
-
-
-    for(int ix=0;ix<_ctd->nox;++ix)
+    /// calculate some value after integrate
+    const double r1 = ctx[0]/ctx[2];
+    const double r2 = ctx[1]/ctx[2];
+    for(int k=0; k<_cs->nproc_surf;++k)
     {
-        for(int jy=0;jy<_ctd->noy;++jy)
+        citcoms_sphere_dump * _csd = _cs->cap + k;
+        for(int j=0; j<_csd->nel; ++j)
         {
-            for(int kz=0; kz<_ctd->noz; ++kz)
-            {
-                const int n3 = (kz+1) + _ctd->noz*ix + _ctd->noz*_ctd->nox*jy; // node
-            }
-
-            const int n2 = jy + _ctd->noy*ix;
-            pos[3*n2 + 0] = (float) _ctd->x[n3];
-            pos[3*n2 + 1] = (float) _ctd->y[n3];
-            pos[3*n2 + 2] = (float) _ctd->z[n3];
-
-            dump[dump_len*n2 + 0] = (float) _ctd->crust[n3];
-            dump[dump_len*n2 + 1] = (float) _ctd->dump[n3];
+            _csd->data[_noc*j + 0] = _csd->data[_noc*j + 0]/_csd->data[_noc*j + 1];
+            double rh = pow(r2,3) - _csd->data[_noc*j + 0] * (pow(r2,3) - pow(r1,3));
+            rh = pow(rh,1.0/3.0) * Rm;
+            _csd->data[_noc*j + 2] = (float)(Rm - rh);
         }
     }
-    
+
+    /// (2) write to vtm & clean
+    write_citcoms_sphere(_cs, _prefix);
+    clean_citcoms_sphere(_cs);
+
+    exit(0);
+    return 0;
 }
 
 int PostUpdateCitcomsTempDump(citcoms_dump * _cd, SALEcData * _sdata, SALEcData * _rdata)
@@ -404,9 +596,7 @@ int PostUpdateCitcomsTempDump(citcoms_dump * _cd, SALEcData * _sdata, SALEcData 
         int ploc_z = k % _cd->nprocz;
         int nz_offset = ploc_z * _ctd->noz;
 
-        if(kz/_ctd->noz != ploc_z)
-            continue;
-
+        // if(kz/_ctd->noz != ploc_z) continue;
         kz = kz%_ctd->noz;
 
         char _tmp_name[4096];
@@ -421,8 +611,10 @@ int PostUpdateCitcomsTempDump(citcoms_dump * _cd, SALEcData * _sdata, SALEcData 
 
         const int dump_len = 3;
         const int nodes = _ctd->nox*_ctd->noy;
+        const int elements = (_ctd->nox-1) * (_ctd->noy-1);
+        const int dump_size = elements;
         float * pos = malloc(sizeof(float)*nodes*3);
-        float * dump = malloc(sizeof(float)*nodes*dump_len);
+        float * dump = malloc(sizeof(float)*dump_size*dump_len);
         assert(pos!=NULL);
         assert(dump!=NULL);
 
@@ -430,23 +622,43 @@ int PostUpdateCitcomsTempDump(citcoms_dump * _cd, SALEcData * _sdata, SALEcData 
         {
             for(int jy=0;jy<_ctd->noy;++jy)
             {
-                const int n3 = (kz+1) + _ctd->noz*ix + _ctd->noz*_ctd->nox*jy;
+                // const int n3 = (kz+1) + _ctd->noz*ix + _ctd->noz*_ctd->nox*jy;
+                const int n3 =citcoms_offset(ix+1,jy+1,kz+1,_ctd->nox,_ctd->noy,_ctd->noz);
                 const int n2 = jy + _ctd->noy*ix;
                 pos[3*n2 + 0] = (float) _ctd->x[n3];
                 pos[3*n2 + 1] = (float) _ctd->y[n3];
                 pos[3*n2 + 2] = (float) _ctd->z[n3];
 
-                dump[dump_len*n2 + 0] = (float) _ctd->crust[n3];
-                dump[dump_len*n2 + 1] = (float) _ctd->dump[n3];
+                // dump[dump_len*n2 + 0] = (float) _ctd->crust[n3];
+                // dump[dump_len*n2 + 1] = (float) _ctd->dump[n3];
             }
+        }
+
+        for(int i=0; i<dump_size*dump_len;++i)
+        {
+            dump[i] = 0.f;
+        }
+
+        double Rm = _cd->TransformR;
+        double ctx[] = {Rm - 400.0e3, Rm, Rm};
+        VIntCitcomsTempDump(_ctd, dump, dump_size,fr, ctx);
+
+        for(int i=0;i<dump_size;++i)
+        {
+            double r1 = ctx[0]/ctx[2];
+            double r2 = ctx[1]/ctx[2];
+            dump[3*i + 0] = dump[3*i + 0]/dump[3*i + 1];
+            double rh = pow(r2,3) - dump[3*k +0]*(pow(r2,3) - pow(r1,3));
+            rh = pow(rh,1.0/3.0) * ctx[2];
+            dump[3*i + 2] = ctx[1] - rh;
         }
 
         vts_file_header(vts_fp, piece_extent, whole_extent);
         vtk_point_data_header(vts_fp);
-        vtk_dataarray_vec_f(vts_fp, "dump", "binary", dump, nodes, dump_len);
+        // vtk_dataarray_vec_f(vts_fp, "dump", "binary", dump, nodes, dump_len);
         vtk_point_data_trailer(vts_fp);
         vtk_cell_data_header(vts_fp);
-        // export cell data
+        vtk_dataarray_vec_f(vts_fp, "dump", "binary", dump, elements, dump_len);
         vtk_cell_data_trailer(vts_fp);
         vtk_point_header(vts_fp);
         vtk_dataarray_vec_f(vts_fp, "coordinate", "binary", pos, nodes, 3);
@@ -677,7 +889,8 @@ int UpdateCitcomsTracerDump(citcoms_dump * _cd, SALEcData * _sdata)
 int UpdateCitcomsDump(citcoms_dump * _cdp, SALEcData * _sdata, SALEcData * _rdata)
 {
     UpdateCitcomsTempDump(_cdp,_sdata,_rdata);
-    PostUpdateCitcomsTempDump(_cdp,_sdata,_rdata);
+    SphereIntegrateCitcomsDump(_cdp, "dump2");
+    // PostUpdateCitcomsTempDump(_cdp,_sdata,_rdata);
     // UpdateCitcomsTracerDump(_cdp,_sdata);
     // CheckCitcomsTracerDump(_cdp);
     // citcoms_tracer_dump_pvtp(_cdp,"tracer_dump");

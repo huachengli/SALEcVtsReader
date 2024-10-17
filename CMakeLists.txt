@@ -10,7 +10,9 @@ SET(SRCS src/VtsTag.c
         src/InputParser.c
         src/Utility.c
         src/Statistic.c
-        src/lmath.c)
+        src/lmath.c
+        src/lmath3d8.c
+)
 
 SET(VTP_SRCS src/VtpReader.c
         src/VtpTag.c

@@ -25,7 +25,20 @@ typedef struct CitcomsTemImpl
     double * dump;
 } citcoms_temp_dump;
 
-typedef struct CitcomsTracerImpl
+typedef struct CitcomsSphereDumpImpl
+{
+    int nox;
+    int noy;
+    int noz;
+    int nno;
+    int ncaps;
+    float * pos;
+    float * data;
+    int noc;
+    int nel;
+} citcoms_sphere_dump;
+
+typedef struct CitcomsTracerDumpImpl
 {
     int ncaps;
     int num_basic_q;
@@ -72,6 +85,17 @@ typedef struct CitcomsDumpImpl
     citcoms_tracer_mixed * mtracer;
 } citcoms_dump;
 
+typedef struct CitcomsSphereImpl
+{
+    int nproc;
+    int nproc_surf;
+    int nprocx;
+    int nprocy;
+    int nprocz;
+    citcoms_sphere_dump * cap;
+} citcoms_sphere;
+
+
 typedef struct TracerIJKFinder
 {
     int nox;
@@ -110,6 +134,11 @@ int load_citcoms_dump(citcoms_dump * _cd, InputFile * ifp);
 int clean_citcoms_temp_dump(citcoms_temp_dump * _ctd);
 int clean_citcoms_tracer_dump(citcoms_tracer_dump * _ctd);
 int clean_citcoms_dump(citcoms_dump * x);
+
+citcoms_sphere * init_citcoms_sphere(citcoms_dump * _cd, int noc);
+int clean_citcoms_sphere(citcoms_sphere * _cs);
+int write_citcoms_sphere(citcoms_sphere * _cs, const char * _name);
+
 citcoms_dump * InitCitcomsDump(InputFile * ifp);
 int CloseCitcomsDump(citcoms_dump * x);
 SALEcData * CrInitSALEcData(InputFile * ifp);
