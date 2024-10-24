@@ -31,7 +31,7 @@
 #define SALEC_VTS_CELLDATA 25
 #define SALEC_VTS_POINTS 29
 #define SALEC_VTS_NONE 0
-#define LOADTHREADS 64
+#define LOADTHREADS 32
 
 typedef struct
 {
@@ -80,6 +80,7 @@ void RandomStr(unsigned char * _str,int _slen);
 
 
 void ReadVtsBinaryF32(float ** _data,unsigned long * _dlen,FILE * fp);
+void ReadVtsAsciiF32(float ** _data,unsigned long * _dlen,FILE * fp);
 void VtsLoad(VtsInfo * _vfp,FILE * fp);
 int VtsFrameHeadLoad(VtsInfo * _vsp,FILE *fp);
 int VtsFrameLoad(VtsInfo * _vsf,FILE *fp);

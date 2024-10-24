@@ -87,6 +87,7 @@ int Strok(const char _str[],const char _delim[], char value[])
 
 int ReadLineTrim(unsigned char _buffer[],FILE *fp)
 {
+    _buffer[0] = '\0';
     (void )fscanf(fp,"%[^\n]",_buffer);
     fgetc(fp);
     trim(_buffer);
@@ -199,7 +200,7 @@ InputFile * OpenInputFile(const char fname[])
     }
     ifp->Len = 0;
 
-    char LineBuffer[300];
+    char LineBuffer[4096];
     char MainDelimiter[] = "= ";
     char SubDelimiter[]  = "#*\"";
     char Field[MaxStrLen] = "mesh";

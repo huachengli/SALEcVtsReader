@@ -359,3 +359,118 @@ Interpolation IpV_X[NIpV][3] = {
         { Ip3d7_X1, Ip3d7_X2, Ip3d7_X3},
 };
 
+/// interpolation function on surface
+double Ip2d0(const double *_x)
+{
+    return 0.25 * (1 + _x[0]) * (1 + _x[1]);
+}
+
+double Ip2d0_X1(const double *_x)
+{
+    return 0.25 * (1 + _x[1]);
+}
+
+double Ip2d0_X2(const double *_x)
+{
+    return 0.25 * (1 + _x[0]);
+}
+
+double Ip2d1(const double *_x)
+{
+    return 0.25 * (1 - _x[0]) * (1 + _x[1]);
+}
+
+double Ip2d1_X1(const double *_x)
+{
+    return -0.25 * (1 + _x[1]);
+}
+
+double Ip2d1_X2(const double *_x)
+{
+    return 0.25 * (1 - _x[0]);
+}
+
+double Ip2d2(const double *_x)
+{
+    return 0.25 * (1 - _x[0]) * (1 - _x[1]);
+}
+
+double Ip2d2_X1(const double *_x)
+{
+    return -0.25 * (1 - _x[1]);
+}
+
+double Ip2d2_X2(const double *_x)
+{
+    return -0.25 * (1 - _x[0]);
+}
+
+double Ip2d3(const double *_x)
+{
+    return 0.25 * (1 + _x[0]) * (1 - _x[1]);
+}
+
+double Ip2d3_X1(const double *_x)
+{
+    return 0.25 * (1 - _x[1]);
+}
+
+double Ip2d3_X2(const double *_x)
+{
+    return -0.25 * (1 + _x[0]);
+}
+
+Interpolation IpB[NIpB] = {Ip2d0, Ip2d1, Ip2d2, Ip2d3};
+Interpolation IpB_X[NIpB][2] = {
+        {Ip2d0_X1, Ip2d0_X2},
+        {Ip2d1_X1, Ip2d1_X2},
+        {Ip2d2_X1, Ip2d2_X2},
+        {Ip2d3_X1, Ip2d3_X2},
+};
+
+void XgIpB(double Xg[], double Xi[][DIM], const double xl[])
+{
+    // Xg is the coordinate global
+    // Xi is the Vertexes of Volume
+    // xl is the local coordinate
+    Zero(Xg);
+    for (int i = 0; i < NIpB; i++)
+    {
+        ScalerAddition(Xg, Xi[i], IpB[i](xl));
+    }
+}
+
+void XgIpB_X(double Xg[], double Xi[][DIM], const double xl[], const int _d)
+{
+    Zero(Xg);
+    for (int i = 0; i < NIpB; i++)
+    {
+        ScalerAddition(Xg, Xi[i], IpB_X[i][_d](xl));
+    }
+}
+
+void DeriveArea(double Xi[][DIM], double a[])
+{
+    // calculate the norm vector of a face
+    double tArea[DIM] = {0.0, 0.0, 0.0};
+    for (int k = 0; k < NGI2d; k++)
+    {
+        double tA[3] = {0.0, 0.0, 0.0};
+        double tX1[3] = {0.0, 0.0, 0.0};
+        double tX2[3] = {0.0, 0.0, 0.0};
+
+        XgIpB_X(tX1, Xi, GIPS2d[k], X);
+        XgIpB_X(tX2, Xi, GIPS2d[k], Y);
+
+        Cross(tX1, tX2, tA);
+        ScalerAddition(tArea, tA, GIWS2d[k]);
+    }
+    Copy(tArea, a);
+}
+
+const double GIPS2d[NGI2d][2] = {
+        {-BETA, -BETA},
+        {-BETA, BETA},
+        {BETA,  -BETA},
+        {BETA,  BETA}};
+const double GIWS2d[NGI2d] = {1.0, 1.0, 1.0, 1.0};

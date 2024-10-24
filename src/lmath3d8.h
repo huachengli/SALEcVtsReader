@@ -11,6 +11,7 @@
 
 #define NGI3d 8
 #define NIpV 8
+#define NIpB 4
 
 #define DIM 3
 #define CARTESIAN 1
@@ -58,6 +59,15 @@ double Contraction(const double _a[][DIM], const double _b[][DIM]);
 double Max(double a, double b);
 double Min(double a, double b);
 double Wind(double x,double a, double b);
+
+/// some function on surface
+extern Interpolation IpB[NIpB];
+extern Interpolation IpB_X[NIpB][2];
+#define NGI2d 4
+extern const double GIPS2d[NGI2d][2];
+extern const double GIWS2d[NGI2d];
+void DeriveArea(double Xi[][DIM], double a[]);
+void XgIpB(double Xg[], double Xi[][DIM], const double xl[]);
 
 #endif //SALECVTSREADER_LMATH3D8_H
 

@@ -8,6 +8,24 @@
 #include "Utility.h"
 #include "VtkWriter.h"
 
+typedef struct
+{
+    int nox;
+    int noy;
+    int noz;
+    int nno;
+    int nel;
+    int nproc;
+    int nproc_surf;
+    int nprocx;
+    int nprocy;
+    int nprocz;
+    char VtsPrefix[4096];
+    char OutPrefix[4096];
+    VtsInfo * VSF;
+} CitcomsData;
+
+
 typedef struct CitcomsTemImpl
 {
     int nox;
@@ -31,11 +49,13 @@ typedef struct CitcomsSphereDumpImpl
     int noy;
     int noz;
     int nno;
-    int ncaps;
     float * pos;
-    float * data;
+    float * data; // data of cell
+    float * pdata; // data of point
     int noc;
     int nel;
+    float * marker;
+    float * area;
 } citcoms_sphere_dump;
 
 typedef struct CitcomsTracerDumpImpl
@@ -145,6 +165,9 @@ SALEcData * CrInitSALEcData(InputFile * ifp);
 SALEcData * CrInitSALEcData_ref(InputFile * ifp);
 void CrCloseSALEcData(SALEcData * _sdata);
 
+int StructedGridIntf(double ** X, double * _data, int *shape, int *eid, double * res, double (*f)(double *, double *), double * ctx);
+int StructedGridIntf2(float * X, float * _data, int *shape, int *eid, double * res, double (*f)(double *, double *), double * ctx);
+int VIntCitcomsTempDump(citcoms_temp_dump * _ctd, float * dump, int len_dump,double (*f[])(double *,double *),  double * ctx);
 int UpdateCitcomsTempDump(citcoms_dump * _cd, SALEcData * _sdata, SALEcData * _rdata);
 int CheckCitcomsTracerDump(citcoms_dump * _cd);
 int UpdateCitcomsTracerDump(citcoms_dump * _cd, SALEcData * _sdata);
@@ -171,4 +194,16 @@ int citcoms_check_tracer_element(citcoms_dump * _cd);
 double solve_local(double * x,double * v2, double * v1, double * v0);
 float solve_local_f(float * x,float * v2, float * v1, float * v0);
 void set_projection_axis(double * n2, double * n1, double * n0, double * A, double * B, double *C, double *D);
+
+int SphereIntegrateCitcomsDump(citcoms_dump * _cd, const char * _prefix);
+int SphereIntegrateCitcomsDump2(CitcomsData * _cd, const char * _prefix);
+CitcomsData * init_citcoms_data(const char * input);
+int load_citcoms_step(CitcomsData * _cdata, int step);
+int clean_citcoms_data(CitcomsData * _cdata);
+int close_citcoms_data(CitcomsData * _cdata);
+
+citcoms_sphere * init_citcoms_sphere2(CitcomsData * _cd, int noc);
+
+int set_ring_scope(citcoms_sphere * _cs, const char * fname);
+
 #endif //SALECVTSREADER_CITCOMS_RELATED_H

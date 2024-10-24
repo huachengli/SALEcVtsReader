@@ -6,7 +6,119 @@
 #include <assert.h>
 #include <stdio.h>
 
-int main(int argc,char * argv[])
+int convert_lolatxt(int nx, int ny, int strip,const char * in, const char * out)
+{
+    assert(strip >= 1 && nx%strip == 0 && ny%strip == 0);
+    nx /= strip;
+    ny /= strip;
+
+    const int nx2 = nx + 1;
+
+    float * xtS = malloc(sizeof(float)*(nx+1)*ny*3);
+    float * xtC = malloc(sizeof(float)*(nx+1)*ny*3);
+    float * h = malloc(sizeof(float)*(nx+1)*ny);
+    assert(xtS != NULL && xtC != NULL && h!=NULL);
+    FILE * fp = fopen(in,"r");
+    assert(fp!=NULL);
+
+    char buffer[4096];
+    fgets(buffer, sizeof(buffer), fp);
+
+    for(int j=0;j<ny*strip;++j)
+    {
+        for(int k=0;k<nx*strip;++k)
+        {
+            float x = 0.0;
+            fscanf(fp,"%f ", &x);
+            if(k%strip == 0 && j%strip==0)
+            {
+                h[(k/strip) + (nx+1)*(j/strip)] = x;
+            }
+        }
+    }
+
+    for(int j=0;j<ny*strip;++j)
+    {
+        if(j%strip == 0)
+        {
+            h[(nx+1)*(j/strip) + nx] = h[(nx+1)*(j/strip) + 0];
+        }
+    }
+
+
+
+    // for(int k=0;k<nx*ny;++k)
+    // {
+    //     fscanf(fp,"%f", h+k);
+    // }
+
+    /// set coordinate
+    for(int k=0;k<nx+1;++k)
+    {
+        for(int j=0;j<ny;++j)
+        {
+            int n2 = k + j*(nx+1);
+            float lon = 360.0*k/(nx-1) - 180.0;
+            float lat = 180.0*j/(ny-1) - 90.0;
+
+            xtS[3*n2 + 0] = lon;
+            xtS[3*n2 + 1] = lat;
+            xtS[3*n2 + 2] = 0.0f;
+
+            lon *= M_PI/180.0;
+            lat *= M_PI/180.0;
+
+            xtC[3*n2 + 0] = cos(lat) * cos(lon);
+            xtC[3*n2 + 1] = cos(lat) * sin(lon);
+            xtC[3*n2 + 2] = sin(lat);
+        }
+    }
+
+    for(int k=0;k<nx2;++k)
+    {
+        for(int j=0;j<ny;++j)
+        {
+            int n2 = k + j*nx2;
+            float Rm = 1.74e6;
+            float ah = h[n2] / Rm * 1.0f + 1.0f;
+
+            xtC[3*n2 + 0] *= ah;
+            xtC[3*n2 + 1] *= ah;
+            xtC[3*n2 + 2] *= ah;
+        }
+    }
+
+
+    FILE * vfp = fopen(out,"w");
+    assert(vfp!=NULL);
+    char whole_extent[4096], piece_extent[4096];
+    snprintf(whole_extent,4096,"%d %d %d %d 0 0",1,nx+1,1,ny);
+    snprintf(piece_extent,4096,"%d %d %d %d 0 0",1,nx+1,1,ny);
+    vts_file_header(vfp,whole_extent,piece_extent);
+    char TimeValueAttr[4096];
+    vtk_point_data_header(vfp);
+    vtk_dataarrayf(vfp,"h","binary",h,(nx+1)*ny);
+    vtk_point_data_trailer(vfp);
+    vtk_cell_data_header(vfp);
+    vtk_cell_data_trailer(vfp);
+    vtk_output_coordf(vfp,"binary",xtC,(nx+1)*ny);
+    vts_file_trailer(vfp);
+    fclose(vfp);
+    fclose(fp);
+    free(xtS);
+    free(xtC);
+    free(h);
+    return 0;
+}
+
+int main()
+{
+    convert_lolatxt(10000, 5000, 2, "./LOLA_export.txt", "lola.vts");
+    // convert_lolatxt(5000, 10000, "./LOLA_export.txt", "lola.vts");
+    return 0;
+}
+
+int old__main(int argc,char * argv[])
 {
     char * txt_name = "./tif2.txt";
     char * vts_name = "./surface2.vts";

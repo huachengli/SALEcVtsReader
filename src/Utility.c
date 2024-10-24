@@ -926,6 +926,21 @@ unsigned long find_cellfield(const char _src[], VtsInfo * _vsf)
     return result;
 }
 
+unsigned long find_pointfield(const char _src[], VtsInfo * _vsf)
+{
+    unsigned long result= 100;
+    for(int k=0;k<_vsf->PointNoF;++k)
+    {
+        if(0== strcasecmp(_src,_vsf->PointField[k].Name))
+        {
+            result = k;
+            break;
+        }
+    }
+    return result;
+}
+
+
 
 void GetProfileWriteCache(SALEcData * _sdata, Plane * _out, ProfileCache * _cache, VTSDATAFLOAT _tol)
 {

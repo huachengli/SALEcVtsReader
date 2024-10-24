@@ -14,7 +14,7 @@
 #include <math.h>
 
 #define MaxStrLen   4096
-#define MaxKeyId    200
+#define MaxKeyId    4096
 
 typedef struct {
     char Key[MaxKeyId][MaxStrLen];

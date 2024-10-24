@@ -144,6 +144,52 @@ void ReadVtsBinaryF32(float ** _data,unsigned long * _dlen,FILE * fp)
     fgetc(fp);
 }
 
+void ReadVtsAsciiF32(float ** _data,unsigned long * _dlen,FILE * fp)
+{
+    long int position0 = ftell(fp);
+
+    unsigned char LineBuffer[1024];
+    int ndata = 0;
+    while(1)
+    {
+        ReadLineTrim(LineBuffer,fp);
+        char * r0 = strstr(LineBuffer,"DataArray");
+        if(NULL != r0)
+            break;
+        float x;
+        int offset = 0, p =0;
+        while(1==sscanf(LineBuffer + offset, "%f%n", &x, &p))
+        {
+            offset += p;
+            ndata++;
+        }
+    }
+    fseek(fp, position0, SEEK_SET);
+    float * data = malloc(sizeof(float)*ndata);
+    int kdata = 0;
+    while(1)
+    {
+        long int position1 = ftell(fp);
+        ReadLineTrim(LineBuffer,fp);
+        if(strstr(LineBuffer,"DataArray"))
+        {
+            fseek(fp, position1, SEEK_SET);
+            break;
+        }
+        int offset=0, p=0;
+        while(1==sscanf(LineBuffer+offset, "%f%n", data + kdata, &p))
+        {
+            offset+= p;
+            kdata++;
+        }
+    }
+
+    assert(ndata == kdata);
+    *_data = data;
+    *_dlen = ndata;
+}
+
+
 
 void VtsLoad(VtsInfo * _vfp,FILE * fp)
 {
@@ -160,7 +206,18 @@ void VtsLoad(VtsInfo * _vfp,FILE * fp)
         VtsStackFrame * _vsf = _vfp->StackPos - 1 + _vfp->VtsStack;
         if(_vsf->Tag == SALEC_VTS_DATAARRAY)
         {
-            ReadVtsBinaryF32(&(_vfp->ActiveVtsData->Data),&(_vfp->ActiveVtsData->DataLen),fp);
+            if(strcasecmp(_vfp->ActiveVtsData->Format,"binary")==0)
+            {
+                ReadVtsBinaryF32(&(_vfp->ActiveVtsData->Data),&(_vfp->ActiveVtsData->DataLen),fp);
+            }
+            else if(strcasecmp(_vfp->ActiveVtsData->Format,"ascii")==0)
+            {
+                ReadVtsAsciiF32(&(_vfp->ActiveVtsData->Data),&(_vfp->ActiveVtsData->DataLen),fp);
+            }
+            else
+            {
+                fprintf(stderr,"%s:unsupported data format (%s)\n",__func__,_vfp->ActiveVtsData->Format);
+            }
         }
     }
 
