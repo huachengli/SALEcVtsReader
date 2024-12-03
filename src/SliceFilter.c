@@ -9,6 +9,10 @@
 #include "Utility.h"
 #include "SliceFilter.h"
 #include "VtkWriter.h"
+#include "lmath.h"
+
+float CheckVtsCellField(SALEcData * _s, const char * name);
+float CheckVtsPointField(SALEcData * _s, const char * name);
 
 int main(int argc,char * argv[])
 {
@@ -89,6 +93,8 @@ int main(int argc,char * argv[])
         sprintf(DataPath,"%s.proc%%d.%d.vts",DataPrefix,CurrentStep);
         LoadVtsData(SaleData,DataPath);
         fprintf(stdout,"\n");
+        // CheckVtsCellField(SaleData,"sound");
+        // CheckVtsPointField(SaleData,"velocity");
         for(int k=0;k<SliceNum;k++)
         {
             OutSlice[k].d = vd[k];
@@ -116,6 +122,8 @@ int main(int argc,char * argv[])
 
 int GetSliceDataC(SALEcData * _sdata, SliceFilter * _out, unsigned long Id)
 {
+    /// nCL is the vertex number.
+    /// change nx,ny to nCL - 1, revised 2024/11/27
     VtsInfo * _vsf = _sdata->VSF;
     _out->Id = Id;
     if(Id > _vsf->CellNoF) return 0;
@@ -125,18 +133,21 @@ int GetSliceDataC(SALEcData * _sdata, SliceFilter * _out, unsigned long Id)
         free(_out->data_vars);
     }
     _out->data_vars = (VTSDATAFLOAT*) malloc(sizeof(VTSDATAFLOAT)*(_out->nCL[0]*_out->nCL[1])*(_out->NoC));
-    for(unsigned long ix=0;ix<_out->nCL[0];ix++)
+
+    int nx = _out->nCL[0]-1, ny = _out->nCL[1]-1;
+
+    for(unsigned long ix=0;ix<nx;ix++)
     {
-        for(unsigned long jy=0;jy<_out->nCL[1];jy++)
+        for(unsigned long jy=0;jy<ny;jy++)
         {
             // column array
-            _out->data[ix][jy] =  _out->data_vars + (ix + jy*_out->nCL[0])*(_out->NoC);
+            _out->data[ix][jy] =  _out->data_vars + (ix + jy*nx)*(_out->NoC);
         }
     }
 
-    for(unsigned long ix=0;ix<_out->nCL[0];ix++)
+    for(unsigned long ix=0;ix<nx;ix++)
     {
-        for(unsigned long jy=0;jy<_out->nCL[1];jy++)
+        for(unsigned long jy=0;jy<ny;jy++)
         {
             if(_out->mask[ix][jy]<0)
             {
@@ -161,7 +172,6 @@ int GetSliceDataC(SALEcData * _sdata, SliceFilter * _out, unsigned long Id)
                     _out->weight[ix][jy][kd]=0.0;
                 }
             }
-
 
             unsigned long taId[2][2][2];
             for(int ia=0;ia<2;ia++)
@@ -191,7 +201,95 @@ int GetSliceDataC(SALEcData * _sdata, SliceFilter * _out, unsigned long Id)
             }
         }
     }
+
+    return nx*ny;
 }
+
+int GetSliceDataV(SALEcData * _sdata, SliceFilter * _out, unsigned long Id)
+{
+    /// adopt from GetSliceDataC
+    VtsInfo * _vsf = _sdata->VSF;
+    _out->Id = Id;
+    if(Id > _vsf->PointNoF) return 0;
+    _out->NoC = _vsf->PointField[_out->Id].NoC;
+    if(NULL != _out->data_vars)
+    {
+        free(_out->data_vars);
+    }
+    _out->data_vars = (VTSDATAFLOAT*) malloc(sizeof(VTSDATAFLOAT)*(_out->nCL[0]*_out->nCL[1])*(_out->NoC));
+
+    int nx = _out->nCL[0], ny = _out->nCL[1];
+
+    for(unsigned long ix=0;ix<nx;ix++)
+    {
+        for(unsigned long jy=0;jy<ny;jy++)
+        {
+            // column array
+            _out->data[ix][jy] =  _out->data_vars + (ix + jy*nx)*(_out->NoC);
+        }
+    }
+
+    for(unsigned long ix=0;ix<nx;ix++)
+    {
+        for(unsigned long jy=0;jy<ny;jy++)
+        {
+            if(_out->mask[ix][jy]<0)
+            {
+                continue;
+            }
+            VTSDATAFLOAT * tfield = _vsf[_out->mask[ix][jy]].PointField[_out->Id].Data;
+            unsigned long tnx = _vsf[_out->mask[ix][jy]].Nxp[0];
+            unsigned long tny = _vsf[_out->mask[ix][jy]].Nxp[1];
+            unsigned long tnz = _vsf[_out->mask[ix][jy]].Nxp[2];
+            unsigned long tx  = _out->offset[ix][jy][0];
+            unsigned long ty  = _out->offset[ix][jy][1];
+            unsigned long tz  = _out->offset[ix][jy][2];
+
+            unsigned long taId[2][2][2];
+            for(int ia=0;ia<2;ia++)
+            {
+                for(int ja = 0; ja < 2; ++ja)
+                {
+                    for(int ka=0;ka<2;ka++)
+                        taId[ia][ja][ka] = _lId3(tx+ia,ty+ja,tz+ka,tnx,tny,tnz);
+                }
+            }
+
+            // Apply nearest interpolation in some condition
+            for(int kd=0;kd<VTSDIM;kd++)
+            {
+                if(_out->offset[ix][jy][kd] < _sdata->Noffset)
+                {
+                    _out->weight[ix][jy][kd] = 1.0;
+                } else if(_out->offset[ix][jy][kd] >= _vsf[_out->mask[ix][jy]].Nxp[kd] - _sdata->Noffset-2)
+                {
+                    _out->weight[ix][jy][kd]=0.0;
+                }
+            }
+
+
+            for(int kc=0;kc<_out->NoC;kc++)
+            {
+                VTSDATAFLOAT ta[2][2];
+                VTSDATAFLOAT tb[2];
+                for(int ia=0;ia<2;ia++)
+                {
+                    for(int ja = 0; ja < 2; ++ja)
+                    {
+                        ta[ia][ja] = lerp(tfield[_lId2(kc,taId[ia][ja][0],_out->NoC,1)],
+                                          tfield[_lId2(kc,taId[ia][ja][1],_out->NoC,1)],
+                                          _out->weight[ix][jy][2]);
+                    }
+                    tb[ia] = lerp(ta[ia][0],ta[ia][1],_out->weight[ix][jy][1]);
+                }
+                _out->data[ix][jy][kc] = lerp(tb[0],tb[1],_out->weight[ix][jy][0]);
+            }
+        }
+    }
+
+    return nx*ny;
+}
+
 
 #define SAFEFREE(x) if(NULL!=(x)) {free(x); x=NULL;}
 void CleanSlice(SliceFilter * _out)
@@ -280,22 +378,31 @@ int WriteSliceDataAll(SALEcData * _sdata, SliceFilter * _out, const char * _out_
     fprintf(stdout, "==>Write %s\n", _out_name);
 
     char whole_extent[4096], piece_extent[4096];
-    snprintf(whole_extent,4096,"%d %lu %d %lu 0 0",1,_out->shape[0]-1,1,_out->shape[1]-1);
+    //snprintf(whole_extent,4096,"%d %lu %d %lu 0 0",1,_out->shape[0]-1,1,_out->shape[1]-1);
+    snprintf(whole_extent,4096,"%d %lu %d %lu 0 0",1,_out->shape[0],1,_out->shape[1]);
     snprintf(piece_extent,4096,"%d %lu %d %lu 0 0",1,_out->shape[0],1,_out->shape[1]);
     int len_pointdata = _out->shape[0]*_out->shape[1];
     int len_celldata = (_out->shape[0] - 1)*(_out->shape[1] - 1);
     vts_file_header(fp,piece_extent,whole_extent);
     vtk_point_data_header_with_attr(fp," ");
     // export point data
-     for(int k=0;k<_sdata->VSF->CellNoF;++k)
+    for(int k=0;k<_sdata->VSF->PointNoF;++k)
     {
-        GetSliceDataC(_sdata,_out,k);
-        fprintf(stdout,"(%s)",_sdata->VSF->CellField[k].Name);
-        vtk_dataarray_vecf(fp,_sdata->VSF->CellField[k].Name,"binary",_out->data_vars,len_pointdata,_out->NoC);
+        if(strcasecmp(_sdata->VSF->PointField[k].Name,"coordinate")==0)
+            continue;
+        GetSliceDataV(_sdata,_out,k);
+        fprintf(stdout,"(%s)",_sdata->VSF->PointField[k].Name);
+        vtk_dataarray_vecf(fp,_sdata->VSF->PointField[k].Name,"binary",_out->data_vars,len_pointdata,_out->NoC);
     }
     vtk_point_data_trailer(fp);
     vtk_cell_data_header(fp);
     // export cell data
+    for(int k=0;k<_sdata->VSF->CellNoF;++k)
+    {
+        GetSliceDataC(_sdata,_out,k);
+        fprintf(stdout,"(%s)",_sdata->VSF->CellField[k].Name);
+        vtk_dataarray_vecf(fp,_sdata->VSF->CellField[k].Name,"binary",_out->data_vars,len_celldata,_out->NoC);
+    }
     vtk_cell_data_trailer(fp);
     vtk_output_coordf(fp,"binary",_out->data_coord,len_pointdata);
     fprintf(stdout,"(COORD)");
@@ -305,5 +412,82 @@ int WriteSliceDataAll(SALEcData * _sdata, SliceFilter * _out, const char * _out_
     return 1;
 }
 
+float CheckVtsCellField(SALEcData * _s, const char * name)
+{
+    assert(NULL != _s);
+    int Id = find_cellfield(name,_s->VSF);
+    assert(100 > Id);
+
+    float kmin_val = VtmGetCellData(_s,Id,1,1,1)[0];
+    float kmax_val = VtmGetCellData(_s,Id,1,1,1)[0];
+    int kmin_index[3] = {1,1,1}, kmax_index[3] = {1,1,1};
+    for(int ix=0; ix<_s->nGCLC[0];++ix)
+    {
+        for(int jy=0;jy<_s->nGCLC[1];++jy)
+        {
+            for(int kz=0;kz<_s->nGCLC[2];++kz)
+            {
+                VTSDATAFLOAT * p = VtmGetCellData(_s,Id,ix,jy,kz);
+                if(p[0] > kmax_val){
+                    kmax_val = p[0];
+                    kmax_index[0] = ix;
+                    kmax_index[1] = jy;
+                    kmax_index[2] = kz;
+                }
+                if(p[0] < kmin_val){
+                    kmin_val = p[0];
+                    kmin_index[0] = ix;
+                    kmin_index[1] = jy;
+                    kmax_index[2] = kz;
+                }
+            }
+        }
+    }
+    fprintf(stdout,"%s:%s in block\n", name,__func__);
+    fprintf(stdout, "max is %e at (%d,%d,%d)\n", kmax_val, kmax_index[0], kmax_index[1], kmax_index[2]);
+    fprintf(stdout, "min is %e at (%d,%d,%d)\n", kmin_val, kmin_index[0], kmin_index[1], kmin_index[2]);
+    return 0;
+}
+
+float CheckVtsPointField(SALEcData * _s, const char * name)
+{
+    assert(NULL != _s);
+    int Id = find_pointfield(name,_s->VSF);
+    int noc = _s->VSF[0].PointField[Id].NoC;
+    assert(100 > Id);
+
+    VTSDATAFLOAT * p0 = VtmGetPointData(_s,Id,1,1,1);
+
+    float kmin_val = VecLenF(p0,noc);
+    float kmax_val = VtmGetPointData(_s,Id,1,1,1)[0];
+    int kmin_index[3] = {1,1,1}, kmax_index[3] = {1,1,1};
+    for(int ix=0; ix<_s->nGCLV[0];++ix)
+    {
+        for(int jy=0;jy<_s->nGCLV[1];++jy)
+        {
+            for(int kz=0;kz<_s->nGCLV[2];++kz)
+            {
+                VTSDATAFLOAT * p = VtmGetPointData(_s,Id,ix,jy,kz);
+                float lp = VecLenF(p,noc);
+                if(lp > kmax_val){
+                    kmax_val = lp;
+                    kmax_index[0] = ix;
+                    kmax_index[1] = jy;
+                    kmax_index[2] = kz;
+                }
+                if(lp < kmin_val){
+                    kmin_val = lp;
+                    kmin_index[0] = ix;
+                    kmin_index[1] = jy;
+                    kmax_index[2] = kz;
+                }
+            }
+        }
+    }
+    fprintf(stdout,"%s:%s in block\n", name,__func__);
+    fprintf(stdout, "max is %e at (%d,%d,%d)\n", kmax_val, kmax_index[0], kmax_index[1], kmax_index[2]);
+    fprintf(stdout, "min is %e at (%d,%d,%d)\n", kmin_val, kmin_index[0], kmin_index[1], kmin_index[2]);
+    return 0;
+}
 
 

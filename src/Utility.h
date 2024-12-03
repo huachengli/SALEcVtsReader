@@ -66,7 +66,7 @@ typedef struct
     VTSDATAFLOAT ** Lambda;
 } ProfileCache;
 
-
+SALEcData * InitSALEcData(const char * inp, const char * prefix);
 void LoadInpInfo(SALEcData *,const char*);
 void LoadVtsData(SALEcData *,const char *);
 void CleanSALEcData(SALEcData *);
@@ -99,6 +99,7 @@ void CleanPlane(Plane * _out);
 void CleanCache(ProfileCache * _cache,int _n);
 
 VTSDATAFLOAT* VtmGetCellData(SALEcData * _sdata, unsigned long k, unsigned long _i,unsigned long _j, unsigned long _k);
+VTSDATAFLOAT* VtmGetPointData(SALEcData * _sdata, unsigned long k, unsigned long _i,unsigned long _j, unsigned long _k);
 
 #define v_normalize(x) do {\
     VTSDATAFLOAT tmp = sqrt((x)[0]*(x)[0] + (x)[1]*(x)[1] + (x)[2]*(x)[2]); \
@@ -162,5 +163,8 @@ void GetProfileWithCache__(SALEcData * _sdata, Plane * _out, ProfileCache * _cac
 void GetRemnantLim(SALEcData * _sdata, Plane * _out, VTSDATAFLOAT _tol);
 #define GetRemant(_sdata,_out) GetRemnantLim(_sdata,_out,0.05)
 #define SumRemant(_sdata,_out) GetRemnantLim(_sdata,_out,-1.0)
+
+void make_empty_dir(const char * dir);
+void try_make_dir(const char * dir);
 
 #endif //SALECVTSREADER_UTILITY_H

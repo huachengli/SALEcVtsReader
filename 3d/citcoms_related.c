@@ -330,6 +330,11 @@ citcoms_sphere * init_citcoms_sphere2(CitcomsData * _cd, int noc)
                 _csd->area[n2] = VecLen(res,3);
             }
         }
+        _csd->vstat = (float *) malloc(sizeof(float) * noz * noc * _cs->nprocz);
+        for(int j=0;j<noc*noz*_cs->nprocz;++j)
+        {
+            _csd->vstat[j] = 0.;
+        }
     }
     return _cs;
 }
@@ -346,29 +351,48 @@ int clean_citcoms_sphere(citcoms_sphere * _cs)
             free(_cs->cap[k].area);
         if(NULL!=_cs->cap[k].marker)
             free(_cs->cap[k].marker);
+        if(NULL!=_cs->cap[k].vstat)
+            free(_cs->cap[k].vstat);
     }
     free(_cs->cap);
     free(_cs);
     return 0;
 }
 
-int write_citcoms_sphere(citcoms_sphere * _cs, const char * _name)
+int write_citcoms_sphere(citcoms_sphere * _cs, CitcomsData * _cd,const char * _name)
 {
+    try_make_dir("vts");
     char vtm_name[4097];
     snprintf(vtm_name, 4096, "%s.vtm", _name);
     FILE * vtm_fp = fopen(vtm_name,"w");
     assert(vtm_fp != NULL);
-    const char header[] =
-            "<?xml version=\"1.0\"?>\n"
-            "<VTKFile type=\"vtkMultiBlockDataSet\" version=\"1.0\" compressor=\"vtkZLibDataCompressor\" byte_order=\"LittleEndian\">\n"
-            "  <vtkMultiBlockDataSet>\n";
-    fputs(header, vtm_fp);
+
+    if(_cd!=NULL && _cd->len_attach>0)
+    {
+        const char header[] =
+                "<?xml version=\"1.0\"?>\n"
+                "<VTKFile type=\"vtkMultiBlockDataSet\" version=\"1.0\" compressor=\"vtkZLibDataCompressor\" byte_order=\"LittleEndian\">\n";
+        fputs(header, vtm_fp);
+        for(int k=0;k<_cd->len_attach;++k)
+        {
+            fputs(_cd->attach[k], vtm_fp);
+        }
+        fputs("  <vtkMultiBlockDataSet>\n", vtm_fp);
+    }
+    else
+    {
+        const char header[] =
+                "<?xml version=\"1.0\"?>\n"
+                "<VTKFile type=\"vtkMultiBlockDataSet\" version=\"1.0\" compressor=\"vtkZLibDataCompressor\" byte_order=\"LittleEndian\">\n"
+                "  <vtkMultiBlockDataSet>\n";
+        fputs(header, vtm_fp);
+    }
 
     for(int k=0; k<_cs->nproc_surf; ++k)
     {
         citcoms_sphere_dump * _csd = _cs->cap + k;
         char vts_name[4097];
-        snprintf(vts_name,4096,"%s.%04d.vts",_name,k);
+        snprintf(vts_name,4096,"vts/%s.%04d.vts",_name,k);
         fprintf(vtm_fp, "    <DataSet index=\"%d\" file=\"%s\"/>\n",k,vts_name);
         FILE * vts_fp = fopen(vts_name,"w");
         assert(vts_fp != NULL);
@@ -1487,10 +1511,21 @@ CitcomsData * init_citcoms_data(const char * input)
     GetValueS(cfp,"citcoms.input",citcoms_input_path,"example");
     GetValueS(cfp,"citcoms.data",citcoms_data_path,"a");
     GetValueS(cfp,"citcoms.output",citcoms_output_path,"a");
-    CloseInputFile(cfp);
+
+    char StepOpt[4096];
+    GetValueSk(cfp,"citcoms.step",StepOpt,0,"unknown");
+    if(0!= strcasecmp("range", StepOpt))
+    {
+        fprintf(stdout,"%s: unknown step option:%s (shold be range)\n");
+        exit(1);
+    }
 
     InputFile * ifp = OpenInputFile(citcoms_input_path);
     CitcomsData * _cdata = malloc(sizeof(CitcomsData));
+
+    _cdata->step0 = GetValueIk(cfp,"citcoms.step",1,"0");
+    _cdata->step1 = GetValueIk(cfp,"citcoms.step",2,"1");
+    _cdata->step_inc = GetValueIk(cfp,"citcoms.step",3,"1");
     _cdata->nprocx = GetValueI(ifp,"mesh.nprocx","-1");
     _cdata->nprocy = GetValueI(ifp,"mesh.nprocy","-1");
     _cdata->nprocz = GetValueI(ifp,"mesh.nprocz","-1");
@@ -1516,6 +1551,7 @@ CitcomsData * init_citcoms_data(const char * input)
     char datafile[4096];
     GetValueS(ifp,"mesh.datafile",datafile,"a");
     snprintf(_cdata->VtsPrefix,4096,"%s/%s",citcoms_data_path,datafile);
+    CloseInputFile(cfp);
     CloseInputFile(ifp);
 
     _cdata->VSF = NULL;
@@ -1525,7 +1561,6 @@ CitcomsData * init_citcoms_data(const char * input)
 int load_citcoms_step(CitcomsData * _cdata, int step)
 {
     _cdata->VSF = malloc(sizeof(VtsInfo)*_cdata->nproc);
-
     #pragma omp parallel for num_threads(LOADTHREADS) default(shared)
     for(int k=0;k<_cdata->nproc;++k)
     {
@@ -1535,6 +1570,39 @@ int load_citcoms_step(CitcomsData * _cdata, int step)
         VtsLoad(_cdata->VSF+k, fp);
         fclose(fp);
     }
+
+    char vtm_name[4096];
+    snprintf(vtm_name,4096,"%s.%d.vtm",_cdata->VtsPrefix,step);
+    FILE * fp = fopen(vtm_name,"r");
+    assert(fp!=NULL);
+    char _buffer[4096];
+    int k_attach = -1;
+    _cdata->len_attach = 0;
+    while(fgets(_buffer,4096,fp))
+    {
+        char * t = strstr(_buffer,"FieldData");
+        if(k_attach < 0)
+        {
+            if(t == NULL)
+                continue;
+            else
+                k_attach = 0;
+        }
+
+        strncpy(_cdata->attach[k_attach],_buffer, 4096);
+
+        if(k_attach!=0 && t!=NULL)
+        {
+            _cdata->len_attach = k_attach+1;
+            break;
+        }
+        else
+        {
+            k_attach++;
+        }
+    }
+
+    fclose(fp);
     return _cdata->nproc;
 }
 

@@ -36,6 +36,7 @@ void LoadVtsData(SALEcData * _sdata,const char * _vtsPrefix)
     }
 
     strcpy(_sdata->VtsPrefix,_vtsPrefix);
+    //snprintf(_sdata->VtsPrefix,4096,_vtsPrefix);
     int TaskFinished = 0;
 #pragma omp parallel for num_threads(LOADTHREADS) shared(_sdata,stdout,TaskFinished) default(none)
     for(int k=0;k<_sdata->VtsBlockNum;++k)
@@ -79,7 +80,6 @@ void LoadVtsData(SALEcData * _sdata,const char * _vtsPrefix)
     SETGCL(0,1);
     SETGCL(1,_sdata->Npgx[0]);
     SETGCL(2,_sdata->Npgx[0]*_sdata->Npgx[1]);
-
 }
 
 void WriteGCL(SALEcData * _sdata,unsigned int _c,FILE *fp)
@@ -582,6 +582,36 @@ VTSDATAFLOAT* VtmGetCellData(SALEcData * _sdata, unsigned long k, unsigned long 
 //    fprintf(stdout,"%d,%d,%d,%d\n",LId,BlockOffset[0],BlockOffset[1],BlockOffset[2]);
     return VtsGetCellData(_sdata->VSF+LId,k,BlockOffset[0],BlockOffset[1],BlockOffset[2]);
 }
+
+VTSDATAFLOAT* VtmGetPointData(SALEcData * _sdata, unsigned long k, unsigned long _i,unsigned long _j, unsigned long _k)
+{
+    unsigned long BlockId[VTSDIM];
+    unsigned long BlockOffset[VTSDIM];
+
+    BlockId[0] = (_i)/_sdata->Npx[0];
+    BlockOffset[0] = 2+(_i)%_sdata->Npx[0];
+
+    BlockId[1] = (_j)/_sdata->Npx[1];
+    BlockOffset[1] = 2+(_j)%_sdata->Npx[1];
+
+    BlockId[2] = (_k)/_sdata->Npx[2];
+    BlockOffset[2] = 2+(_k)%_sdata->Npx[2];
+
+    for(int m=0;m<3;++m)
+    {
+        if(BlockOffset[m] == 2 && BlockId[m] > 1)
+        {
+            BlockOffset[m] = _sdata->Npx[m] + 2;
+            BlockId[m] -= 1;
+        }
+    }
+
+    //    unsigned long LId = BlockId[0] + _sdata->Npgx[0]*(BlockId[1] + _sdata->Npgx[1]*BlockId[2]);
+    unsigned long LId = BlockId[0] + _sdata->Npgx[0]*(BlockId[1] + _sdata->Npgx[1]*BlockId[2]);
+
+    return VtsGetPointData(_sdata->VSF+LId,k,BlockOffset[0],BlockOffset[1],BlockOffset[2]);
+}
+
 
 void GetProfileLim(SALEcData * _sdata, Plane * _out, VTSDATAFLOAT _tol)
 {
@@ -1095,4 +1125,49 @@ void GetProfileWithCache__(SALEcData * _sdata, Plane * _out, ProfileCache * _cac
     }
 }
 
+void make_empty_dir(const char * dir)
+{
+    if(access(dir, F_OK) == 0)
+    {
+        DIR * _dir = opendir(dir);
+        struct dirent * _tmp;
+        while(1)
+        {
+            _tmp = readdir(_dir);
+            if(NULL == _tmp) break;
+            if(strcasecmp(".",_tmp->d_name)==0 || strcasecmp("..",_tmp->d_name)==0) continue;
+            if(_tmp->d_type == DT_REG)
+            {
+                char _tmp_name[4096];
+                snprintf(_tmp_name,4096,"%s/%s",dir,_tmp->d_name);
+                remove(_tmp_name);
+            }
 
+        }
+        closedir(_dir);
+    } else
+    {
+        mkdir(dir, 0700);
+    }
+}
+
+void try_make_dir(const char * dir)
+{
+    if(access(dir, F_OK) == 0)
+    {
+        ///  skip
+    } else
+    {
+        mkdir(dir, 0700);
+    }
+}
+
+SALEcData * InitSALEcData(const char * inp, const char * prefix)
+{
+    SALEcData * _sdata = malloc(sizeof(SALEcData));
+    assert(_sdata != NULL);
+    LoadInpInfo(_sdata,inp);
+    //snprintf(_salec_data_path,4096,"%s.proc%%d.%d.vts",_salec_data_prefix,_salec_data_step);
+    LoadVtsData(_sdata,prefix);
+    return _sdata;
+}

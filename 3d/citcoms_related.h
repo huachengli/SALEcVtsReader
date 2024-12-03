@@ -22,7 +22,12 @@ typedef struct
     int nprocz;
     char VtsPrefix[4096];
     char OutPrefix[4096];
+    int step0;
+    int step1;
+    int step_inc;
     VtsInfo * VSF;
+    char attach[200][4096];
+    int len_attach;
 } CitcomsData;
 
 
@@ -56,6 +61,7 @@ typedef struct CitcomsSphereDumpImpl
     int nel;
     float * marker;
     float * area;
+    float * vstat;
 } citcoms_sphere_dump;
 
 typedef struct CitcomsTracerDumpImpl
@@ -157,7 +163,7 @@ int clean_citcoms_dump(citcoms_dump * x);
 
 citcoms_sphere * init_citcoms_sphere(citcoms_dump * _cd, int noc);
 int clean_citcoms_sphere(citcoms_sphere * _cs);
-int write_citcoms_sphere(citcoms_sphere * _cs, const char * _name);
+int write_citcoms_sphere(citcoms_sphere * _cs, CitcomsData * _cd,const char * _name);
 
 citcoms_dump * InitCitcomsDump(InputFile * ifp);
 int CloseCitcomsDump(citcoms_dump * x);
@@ -205,5 +211,6 @@ int close_citcoms_data(CitcomsData * _cdata);
 citcoms_sphere * init_citcoms_sphere2(CitcomsData * _cd, int noc);
 
 int set_ring_scope(citcoms_sphere * _cs, const char * fname);
-
+int vts_find_solidify_thickness(citcoms_sphere * _cs, CitcomsData * _cd);
+int calculate_effective_depth(citcoms_sphere * _cs, CitcomsData * _cd, const char * tname);
 #endif //SALECVTSREADER_CITCOMS_RELATED_H

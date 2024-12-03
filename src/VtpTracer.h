@@ -4,7 +4,8 @@
 
 #ifndef SALECVTSREADER_VTPTRACER_H
 #define SALECVTSREADER_VTPTRACER_H
-
+#include "Utility.h"
+#include "VtpReader.h"
 // let's map tracer info back to grid
 typedef struct GridTracerDef
 {
@@ -50,6 +51,10 @@ typedef struct TracerFileCollectDef
     char Name[MaxStrLen];
     char prefix[MaxStrLen];
     int step;
+    int ne;
+    int nex;
+    int ney;
+    int nez;
 } VtpTracerCollect;
 
 typedef struct name2data
@@ -64,7 +69,11 @@ VtpTracerCollect * FlushVtpTracerCollect(GridTracer * gtf,const char * _prefix, 
 int CloseVtpTracerCollect(VtpTracerCollect * _vtc);
 int ShowBriefVtpFile(VtpFile * vfp, FILE * fp);
 int ShowBriefVtpColleect(VtpTracerCollect * vtc, FILE * fp);
-VtpFile * SALEcVtpCollectFilter(VtpTracerCollect * vtc);
+VtpFile * SALEcVtpCollectMatFilter(VtpTracerCollect * vtc);
+VtpFile * SALEcVtpCollectPosFilter(VtpTracerCollect * vtc);
+VtpFile * SALEcVtpCollectPosFuncFilter(VtpTracerCollect * vtc, int (*tf)(const double*,const double*),const double * ctx);
+VtpFile * VtpGetMelting(VtpFile * in);
+VtpFile * VtpGetConnect(VtpFile * in, VtpTracerCollect * vtc,SALEcData * ref);
 int InitGridTracer(GridTracer * gtf,InputFile * ifp);
 int LoadGridTxtFile(GridTracer * gtf,const char * fname);
 int FlushGridTracerFromVtp(GridTracer * gtf, VtpFile * vfp);
@@ -73,5 +82,18 @@ int WriteGridTracer(GridTracer * gtf, const char * vts_name);
 int ExportGridTracerF32Bin(GridTracer * gtf, const char * binprefix);
 unsigned long find_vtpfield(const char * _src, VtpFile * vfp);
 VtpFile * duplicate_vtp(VtpFile * in, unsigned long n);
+int vtp_add_field(VtpFile * in, const char * name, int noc);
 int copy_vtp_k(VtpFile * x, unsigned long px, VtpFile * y, unsigned long  py);
+
+typedef struct Ring
+{
+    double * pts;
+    int npts;
+    int * chords;
+    int nchord;
+} ring;
+ring * load_ring_txt(const char * fname);
+int check_in_ring(double * p, ring * _r);
+int check_in_polygon(double * x, double * pl, int n);
+void clean_ring(ring * _r);
 #endif //SALECVTSREADER_VTPTRACER_H

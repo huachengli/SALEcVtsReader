@@ -3,6 +3,7 @@
 //
 
 #include "spa_detect.h"
+#include "VtpTracer.h"
 
 
 double fr0(double *pos, double *ctx)
@@ -311,7 +312,7 @@ int SphereIntegrateCitcomsDump(citcoms_dump * _cd, const char * _prefix)
     apply_spa_filter(_cd, _cs);
 
     /// (2) write to vtm & clean
-    write_citcoms_sphere(_cs, _prefix);
+    write_citcoms_sphere(_cs, NULL,_prefix);
     clean_citcoms_sphere(_cs);
     return 0;
 }
@@ -322,68 +323,16 @@ int SphereIntegrateCitcomsDump2(CitcomsData * _cd, const char * _prefix)
     /// (2) write results to vtm file
 
     /// (1) calculate
-    const int _noc = 4;
+    const int _noc = 5;
     citcoms_sphere * _cs = init_citcoms_sphere2(_cd, _noc);
+    set_ring_scope(_cs,"outring.txt");
+    calculate_effective_depth(_cs, _cd, _prefix);
+    vts_find_solidify_thickness(_cs,_cd);
 
-    /// calculate volume of crust between ctx[0], ctx[1]
-    const double depth = 400.0e3;
-    const double Rm = 1.74e6;
-    double ctx[] = {Rm - depth, Rm, Rm};
-
-    /// functions used for Integrate
-    double (*fctx[])(double*, double*) = {fr0, fr1};
-
-    // for(int k=0; k<_cd->nproc; ++k)
-    // {
-    //     citcoms_temp_dump * _ctd = _cd->temp + k;
-    //     const int cap_id = k/ _cd->nprocz;
-    //     VIntCitcomsTempDump(_ctd, _cs->cap[cap_id].data, _cs->cap[cap_id].nel,fctx, ctx);
-    // }
-
-    // #pragma omp parallel for num_threads(LOADTHREADS) default(shared)
-    // for(int cap_id = 0; cap_id < _cs->nproc_surf; ++cap_id)
-    // {
-    //     for(int k=0; k<_cd->nprocz; ++k)
-    //     {
-    //         VtsInfo * _vsf = _cd->VSF +  _cd->nprocz*cap_id + k;
-    //         VIntCitcomsTempDump2(_vsf, _cs->cap[cap_id].data, _cs->cap[cap_id].nel,fctx, ctx);
-    //     }
-    // }
-
-    // spa_filter(_cs, ctx);
-
-    //apply_spa_filter(_cd, _cs);
-    set_ring_scope(_cs,"ring.txt");
-    int calculate_effective_depth(citcoms_sphere * _cs, CitcomsData * _cd);
-    calculate_effective_depth(_cs, _cd);
-    
     /// (2) write to vtm & clean
-    write_citcoms_sphere(_cs, _prefix);
+    write_citcoms_sphere(_cs,_cd, _prefix);
     clean_citcoms_sphere(_cs);
     return 0;
-}
-
-int check_in_polygon(double * x, double * pl, int n)
-{
-    int in_polygon = 1;
-    for(int k=0; k<n;++k)
-    {
-        double * A = pl + 3*k;
-        double * B = pl + 3*((k+1)%n);
-
-        double AxB[3];
-        VecCross(AxB, A, B, 3);
-        VecNormalize(AxB,3);
-
-        double xdAxB = VecDot(x, AxB, 3);
-
-        if(xdAxB < -1.0e-5)
-        {
-            in_polygon = 0;
-            break;
-        }
-    }
-    return in_polygon;
 }
 
 int set_polygon_marker(double * pl, int n, citcoms_sphere * _cs)
@@ -531,8 +480,7 @@ int set_ring_scope(citcoms_sphere * _cs, const char * fname)
     return 0;
 }
 
-
-int vts_calculate_effective_depth(citcoms_sphere_dump * _csd, VtsInfo * _vsf)
+int vts_calculate_effective_depth(citcoms_sphere_dump * _csd, VtsInfo * _vsf, int zproc)
 {
     const int nox = _vsf->Nxp[0];
     const int noy = _vsf->Nxp[1];
@@ -603,7 +551,7 @@ int vts_calculate_effective_depth(citcoms_sphere_dump * _csd, VtsInfo * _vsf)
                     HC1g[k] = Hg[k] * C1g[k];
                 }
 
-                double Ires[4] = {0., 0., 0., 0.};
+                double Ires[5] = {0., 0., 0., 0.};
 
                 for(int k=0;k<NIpV;k++)
                 {
@@ -617,59 +565,105 @@ int vts_calculate_effective_depth(citcoms_sphere_dump * _csd, VtsInfo * _vsf)
 
                     Ires[1] += GIWS3d[k] * detJV(Xg,GIPS3d[k]); // integral volume
                     double Egk = DataIpV(Eg,GIPS3d[k]);
+
+                    Ires[0] += GIWS3d[k] * detJV(Xg,GIPS3d[k]) * DataIpV(C1g,GIPS3d[k]); // fraction sum
+                    Ires[2] += GIWS3d[k] * detJV(Xg,GIPS3d[k]) * DataIpV(HC1g,GIPS3d[k]); // effective depth
                     if(Egk > 0.01)
                     {
-                        Ires[0] += GIWS3d[k] * detJV(Xg,GIPS3d[k]) * DataIpV(C1g,GIPS3d[k]); // fraction sum
-                        Ires[2] += GIWS3d[k] * detJV(Xg,GIPS3d[k]) * DataIpV(HC1g,GIPS3d[k]); // effective depth
+                        // melting frac
+                        Ires[3] += GIWS3d[k] * detJV(Xg,GIPS3d[k]) * DataIpV(C1g,GIPS3d[k]);
                     }
+                    // if(Egk > 0.01)
+                    // {
+                    //     Ires[0] += GIWS3d[k] * detJV(Xg,GIPS3d[k]) * DataIpV(C1g,GIPS3d[k]); // fraction sum
+                    //     Ires[2] += GIWS3d[k] * detJV(Xg,GIPS3d[k]) * DataIpV(HC1g,GIPS3d[k]); // effective depth
+                    // }
                 }
                 _csd->data[n2*_csd->noc + 0] += Ires[0];
                 _csd->data[n2*_csd->noc + 1] += Ires[1];
                 _csd->data[n2*_csd->noc + 2] += Ires[2];
+                _csd->data[n2*_csd->noc + 3] += Ires[3];
+
+                // collect info cover by ring of interested
+                if(_csd->marker[n2*4+0]+_csd->marker[n2*4+1]+_csd->marker[n2*4+2]+_csd->marker[n2*4+3]>3.0)
+                {
+                    _csd->vstat[(zproc*(noz-1) + kz)*_csd->noc + 0] += Ires[0];
+                    _csd->vstat[(zproc*(noz-1) + kz)*_csd->noc + 1] += Ires[1];
+                    _csd->vstat[(zproc*(noz-1) + kz)*_csd->noc + 2] += Ires[2];
+                    _csd->vstat[(zproc*(noz-1) + kz)*_csd->noc + 3] += Ires[3];
+                }
+
+                // _csd->vstat[(zproc*(noz-1) + kz)*_csd->noc + 0] += Ires[0];
+                // _csd->vstat[(zproc*(noz-1) + kz)*_csd->noc + 1] += Ires[1];
+                // _csd->vstat[(zproc*(noz-1) + kz)*_csd->noc + 2] += Ires[2];
+                // _csd->vstat[(zproc*(noz-1) + kz)*_csd->noc + 3] += Ires[3];
             }
     }
     return 0;
 }
 
-int calculate_effective_depth(citcoms_sphere * _cs, CitcomsData * _cd)
+int calculate_effective_depth(citcoms_sphere * _cs, CitcomsData * _cd, const char * txt_name)
 {
+    FILE * txt_fp = NULL;
+    if(txt_name != NULL)
+    {
+        try_make_dir("txt");
+        char _txt_name[4096];
+        snprintf(_txt_name, 4096, "txt/%s.txt", txt_name);
+        txt_fp = fopen(_txt_name,"w");
+    }
+
     #pragma omp parallel for num_threads(LOADTHREADS) default(shared)
     for(int cap_id = 0; cap_id < _cs->nproc_surf; ++cap_id)
     {
         for(int k=0; k<_cd->nprocz; ++k)
         {
-            vts_calculate_effective_depth(_cs->cap + cap_id, _cd->VSF +  _cd->nprocz*cap_id + k);
+            vts_calculate_effective_depth(_cs->cap + cap_id, _cd->VSF +  _cd->nprocz*cap_id + k, k);
         }
     }
 
-    double sum_area = 0.0;
-    for(int k=0; k<_cs->nproc_surf;++k)
-    {
-        citcoms_sphere_dump *_csd = _cs->cap + k;
-        for(int j=0;j<_csd->nel;++j) sum_area += _csd->area[j];
-    }
-    fprintf(stdout,"sum area:%f*PI\n",sum_area/M_PI);
+    // double sum_area = 0.0;
+    // for(int k=0; k<_cs->nproc_surf;++k)
+    // {
+    //     citcoms_sphere_dump *_csd = _cs->cap + k;
+    //     for(int j=0;j<_csd->nel;++j) sum_area += _csd->area[j];
+    // }
+    // fprintf(stdout,"sum area:%f*PI\n",sum_area/M_PI);
 
-    /// divide volume
+    /// divide volume and build get some summary information
+    const double r2 = 1.0, r1 = 0.1954, Rm=1.74e6;
+    double sum_v = 0.;
+    double sum_f = 0.;
+    double sum_rf = 0.;
+    double sum_a = 0.;
+
     for(int k=0; k<_cs->nproc_surf;++k)
     {
         citcoms_sphere_dump * _csd = _cs->cap + k;
         const int _noc = _csd->noc;
         for(int j=0; j<_csd->nel; ++j)
         {
-            if(_csd->data[_noc*j + 1] <= 0.)
+            if(_csd->data[_noc * j + 1] <= 0.)
                 continue;
 
-            double r2 = 1.0;
-            double r1 = 0.1954;
+            const float *marker = _csd->marker + j * 4;
+            if(marker[0] + marker[1] + marker[2] + marker[3] > 3.0)
+            {
+                sum_v += _csd->data[_noc*j + 1];
+                sum_a += _csd->area[j];
+                sum_f += _csd->data[_noc*j + 0];
+                sum_rf += _csd->data[_noc*j + 2];
+            }
+
+
             double avg_frac = _csd->data[_noc*j + 0]/_csd->data[_noc*j + 1];
             double avg_depth = _csd->data[_noc*j + 2]/_csd->data[_noc*j + 0];
             double eff_thick = pow(r2,3) - avg_frac * (pow(r2,3) - pow(r1,3));
 
             eff_thick = 1.0 - pow(eff_thick,1.0/3.0);
 
-            eff_thick *= 1.74e6;
-            avg_depth *= 1.74e6;
+            eff_thick *= Rm;
+            avg_depth *= Rm;
 
             double eff_thick2 = _csd->data[_noc*j + 0]/_csd->area[j]*1.74e6;
 
@@ -680,5 +674,126 @@ int calculate_effective_depth(citcoms_sphere * _cs, CitcomsData * _cd)
         }
     }
 
+    double eff_thick = pow(r2,3) - (sum_f/sum_v) * (pow(r2,3) - pow(r1,3));
+    eff_thick = 1.0 - eff_thick;
+    double eff_depth = sum_rf/sum_f;
+
+    /// fprintf(stdout,"crust material average thick:%f m, depth:%f m\n", eff_thick*Rm, eff_depth*Rm);
+
+    /// process vstat info
+    const int noc = _cs->cap[1].noc;
+    float * gvstat = malloc(sizeof(float) * _cd->nprocz * _cd->noz * noc);
+    for(int j=0;j<_cd->nprocz * _cd->noz * noc;++j) gvstat[j] = 0.;
+    for(int cap_id = 0; cap_id < _cs->nproc_surf; ++cap_id)
+    {
+        citcoms_sphere_dump * _csd = _cs->cap + cap_id;
+        for(int j=0;j<_cd->nprocz * _cd->noz * noc;++j)
+        {
+            gvstat[j] += _csd->vstat[j];
+        }
+    }
+
+    if(NULL != txt_fp)
+    {
+        fprintf(txt_fp, "%d\n", _cd->nprocz * (_cd->noz-1));
+        for(int j=0;j<_cd->nprocz * (_cd->noz-1);++j)
+        {
+            for(int i=0;i<noc;++i)
+            {
+                fprintf(txt_fp,"%.5e,", gvstat[j*noc + i]);
+            }
+            fprintf(txt_fp,"\n");
+        }
+
+        fprintf(txt_fp, "%d\n", _cd->nprocz*(_cd->noz-1)+1);
+        for(int j=0;j<_cd->nprocz*(_cd->noz-1)+1;++j)
+        {
+            const int iproc = (j-1)/(_cd->noz-1);
+            const int kz = j - iproc*(_cd->noz-1);
+
+            int coord_fId = find_pointfield("coordinate", _cd->VSF + iproc);
+            const int n3 = citcoms_offset(1,1,kz+1,_cd->nox,_cd->noy,_cd->noz) - 1;
+            double x[3] = {_cd->VSF[iproc].PointField[coord_fId].Data[n3*3 + 0],
+                           _cd->VSF[iproc].PointField[coord_fId].Data[n3*3 + 1],
+                           _cd->VSF[iproc].PointField[coord_fId].Data[n3*3 + 2]};
+            fprintf(txt_fp, "%.5e\n", VecLen(x,3));
+        }
+    }
+    free(gvstat);
+    if(NULL!=txt_fp)
+        fclose(txt_fp);
     return 0;
+}
+
+int vts_find_solidify_thickness(citcoms_sphere * _cs, CitcomsData * _cd)
+{
+    #pragma omp parallel for num_threads(LOADTHREADS) default(shared)
+    for(int cap_id = 0; cap_id < _cs->nproc_surf; ++cap_id)
+    {
+        citcoms_sphere_dump * _csd = _cs->cap + cap_id;
+        const int nox = _csd->nox;
+        const int noy = _csd->noy;
+        const int noz = _csd->noz;
+        const int noc = _csd->noc;
+        for(int ix=0;ix<nox-1;ix++)
+            for(int jy=0;jy<noy-1;jy++)
+            {
+                const int n2 = citcoms_offset(ix+1,jy+1,1,nox-1,noy-1,1)-1;
+                for(int k=_cd->nprocz-1;k>=0;--k)
+                {
+                    VtsInfo * _vsf = _cd->VSF +  _cd->nprocz*cap_id + k;
+                    int coord_fId = find_pointfield("coordinate", _vsf);
+                    int melting_fId = find_pointfield("melting",_vsf);
+
+                    float * points = _vsf->PointField[coord_fId].Data;
+                    float * melting = _vsf->PointField[melting_fId].Data;
+
+                    for(int kz=noz-2;kz>=0;kz--)
+                    {
+                        int eid[4] = {0, ix+1, jy+1, kz+1};
+                        int shape[3] = {nox, noy, noz};
+                        int ien[8] = {
+                                citcoms_offset(eid[1]+1,eid[2]+1,eid[3]+0,shape[0],shape[1],shape[2]) - 1,
+                                citcoms_offset(eid[1]+0,eid[2]+1,eid[3]+0,shape[0],shape[1],shape[2]) - 1,
+                                citcoms_offset(eid[1]+0,eid[2]+0,eid[3]+0,shape[0],shape[1],shape[2]) - 1,
+                                citcoms_offset(eid[1]+1,eid[2]+0,eid[3]+0,shape[0],shape[1],shape[2]) - 1,
+                                citcoms_offset(eid[1]+1,eid[2]+1,eid[3]+1,shape[0],shape[1],shape[2]) - 1,
+                                citcoms_offset(eid[1]+0,eid[2]+1,eid[3]+1,shape[0],shape[1],shape[2]) - 1,
+                                citcoms_offset(eid[1]+0,eid[2]+0,eid[3]+1,shape[0],shape[1],shape[2]) - 1,
+                                citcoms_offset(eid[1]+1,eid[2]+0,eid[3]+1,shape[0],shape[1],shape[2]) - 1,
+                        };
+
+                        double Xg[8][3], Rg[8], Mg[8];
+
+                        double Tm=0., Bm=0., Tr=0., Br=0.;
+                        for(int p=0;p<8;++p)
+                        {
+                            Xg[p][0] = points[ien[p]*3 + 0];
+                            Xg[p][1] = points[ien[p]*3 + 1];
+                            Xg[p][2] = points[ien[p]*3 + 2];
+                            Rg[p] = VecLen(Xg[p],3);
+                            Mg[p] = melting[ien[p]];
+                        }
+
+                        Tm = 0.25*(Mg[4] + Mg[5] + Mg[6] + Mg[7]);
+                        Bm = 0.25*(Mg[0] + Mg[1] + Mg[2] + Mg[3]);
+
+                        Tr = 0.25*(Rg[4] + Rg[5] + Rg[6] + Rg[7]);
+                        Br = 0.25*(Rg[0] + Rg[1] + Rg[2] + Rg[3]);
+
+                        const double melt_check = 0.02;
+                        _csd->data[n2*noc + 4] = Tr;
+
+                        if(Tm < melt_check && Bm < melt_check)
+                            continue;
+                        double _k = (Tm - Bm)/(Tr - Br);
+                        _csd->data[n2*noc + 4] = Tr - (melt_check - Tm)/_k;
+                        k=-1;
+                        break;
+                    }
+                }
+
+                _csd->data[n2*noc + 4] = (1.0 - _csd->data[n2*noc + 4])*1.74e6;
+            }
+    }
 }

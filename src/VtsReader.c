@@ -144,6 +144,44 @@ void ReadVtsBinaryF32(float ** _data,unsigned long * _dlen,FILE * fp)
     fgetc(fp);
 }
 
+void ReadVtsBinaryU32(unsigned int ** _data,unsigned long * _dlen,FILE * fp)
+{
+    unsigned char HeadB64[24],HeadChar[16];
+    fread(HeadB64, sizeof(char),24,fp);
+    Base64Decode(HeadB64,24,HeadChar);
+    int HeadInt[4];
+    /*
+     * HeadInt[0]= [const int]
+     * HeadInt[1] = HeadInt[2] length of data uncompressed
+     * HeadInt[3] = length of data compressed
+     */
+    memcpy(HeadInt,HeadChar,16);
+
+    unsigned char *BodyB64,*BodyComp,*BodyUncomp;
+    unsigned long BodyB64Len = 4*ceil((double) HeadInt[3]/3.0);
+    unsigned long BodyCompLen = HeadInt[3];
+    unsigned long BodyUncompLen = HeadInt[2];
+
+    BodyB64 = (unsigned char*) malloc(sizeof(unsigned char)*BodyB64Len);
+    fread(BodyB64, sizeof(unsigned char),BodyB64Len,fp);
+
+    BodyComp = (unsigned char*) malloc(sizeof(unsigned char)*(BodyCompLen+4));
+    // Base64Decode will write the last byte, then BodyComp is 1 byte longer than the data.
+    Base64Decode(BodyB64,BodyB64Len,BodyComp);
+    free(BodyB64);
+
+    BodyUncomp = (unsigned char*) malloc(sizeof(unsigned char)*BodyUncompLen);
+    uncompress(BodyUncomp,&BodyUncompLen,BodyComp,BodyCompLen);
+    free(BodyComp);
+
+    *_dlen = BodyUncompLen/4;
+    *_data = (unsigned int *) malloc(sizeof(unsigned int)*(*_dlen));
+    memcpy(*_data,BodyUncomp,BodyUncompLen);
+    free(BodyUncomp);
+    fgetc(fp);
+}
+
+
 void ReadVtsAsciiF32(float ** _data,unsigned long * _dlen,FILE * fp)
 {
     long int position0 = ftell(fp);
@@ -238,7 +276,7 @@ int VtsFrameHeadLoad(VtsInfo * _vfp,FILE *fp)
     unsigned char SALEcVtsHead[] = "<?xml version=\"1.0\"?>";
     if(0!= strcmp(SALEcVtsHead,LineBuffer))
     {
-        fprintf(stdout,"Wranning/the header of vts is not consistent with SALEc!\n");
+        fprintf(stdout,"Warning/the header of vts is not consistent with SALEc!\n");
         exit(0);
     }
 
@@ -412,7 +450,8 @@ VTSDATAFLOAT * VtsGetPointData(VtsInfo * _vsf,unsigned long k,unsigned long _i, 
         exit(0);
     } else
     {
-        return _vsf->PointField[k].Data + (_k + _vsf->Nxp[2]*(_j + _vsf->Nxp[1]*_i))*pdatalen;
+        //return _vsf->PointField[k].Data + (_k + _vsf->Nxp[2]*(_j + _vsf->Nxp[1]*_i))*pdatalen;
+        return _vsf->PointField[k].Data + (_i + (_vsf->Nxp[0])*(_j + (_vsf->Nxp[1])*_k))*pdatalen;
     }
 }
 

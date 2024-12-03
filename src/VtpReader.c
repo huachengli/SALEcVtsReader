@@ -15,7 +15,10 @@ void VtpLoad(VtpFile * _vfp, FILE *fp)
         VtsStackFrame * _vsf = _vfp->StackPos - 1 + _vfp->VtpStack;
         if(_vsf->Tag == SALEC_VTP_DataArray)
         {
-            ReadVtsBinaryF32(&(_vfp->ActiveData->Data), &(_vfp->ActiveData->DataLen), fp);
+            if(strcasecmp(_vfp->ActiveData->Format,"binary")==0)
+            {
+                ReadVtsBinaryF32(&(_vfp->ActiveData->Data), &(_vfp->ActiveData->DataLen), fp);
+            }
         }
 
         if(_vsf->Tag == SALEC_VTP_Piece && _vfp->NoP == 0)
@@ -79,7 +82,7 @@ int VtpFrameHeadLoad(VtpFile * _vfp,FILE *fp)
     unsigned char SALEcVtsHead[] = "<?xml version=\"1.0\"?>";
     if(0!= strcmp(SALEcVtsHead,LineBuffer))
     {
-        fprintf(stdout,"Wranning/the header of vts is not consistent with SALEc!\n");
+        fprintf(stdout,"Warning/the header of vts is not consistent with SALEc!\n");
         exit(0);
     }
 
@@ -154,8 +157,7 @@ int WriteVtpFile(VtpFile * _vsf)
         VtpData * _vdk = _vsf->PointField + k;
         if(strcasecmp(_vdk->Name,"coordinate") == 0)
             continue;
-
-        vtk_dataarray_vec_f(fp,_vdk->Name,_vdk->Format,_vdk->Data,_vdk->DataLen/_vdk->NoC,_vdk->NoC);
+        vtk_dataarray_vec_f2(fp,_vdk->Name,_vdk->Format,_vdk->Type,_vdk->Data,_vdk->DataLen/_vdk->NoC,_vdk->NoC);
     }
     vtk_point_data_trailer(fp);
     vtk_point_header(fp);

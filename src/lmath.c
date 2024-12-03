@@ -61,6 +61,18 @@ float VecMinF(const float *x, int n)
     return rst;
 }
 
+float VecDisF(const float *x, const float * y, int n)
+{
+    assert(n>=1);
+    float rst = 0;
+    for(int k=0;k<n;++k)
+    {
+        rst += (x[k] - y[k])*(x[k] - y[k]);
+    }
+    return sqrtf(rst);
+}
+
+
 
 double VecScaler(double *x, double p,int n)
 {
@@ -74,7 +86,7 @@ double VecLen(const double *x, int n)
     return sqrt(rst);
 }
 
-double VecLenF(const float *x, int n)
+float VecLenF(const float *x, int n)
 {
     float rst = 0.f;
     for(int k=0; k<n; ++k) rst += x[k]*x[k];

@@ -14,6 +14,8 @@ int VecMaxArgF(const float *x, int n);
 int VecMinArgF(const float *x, int n);
 float VecMaxF(const float *x, int n);
 float VecMinF(const float *x, int n);
+float VecDisF(const float *x, const float * y, int n);
+float VecLenF(const float *x, int n);
 double Clock(int i);
 
 double VecLen(const double *x, int n);

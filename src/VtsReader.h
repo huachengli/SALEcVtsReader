@@ -13,7 +13,9 @@
 #include <math.h>
 #include <ctype.h>
 #include "InputParser.h"
-
+#include <unistd.h>
+#include <dirent.h>
+#include <sys/stat.h>
 
 #define VTSDIM 3
 #define MaxNameLen 50
@@ -80,6 +82,7 @@ void RandomStr(unsigned char * _str,int _slen);
 
 
 void ReadVtsBinaryF32(float ** _data,unsigned long * _dlen,FILE * fp);
+void ReadVtsBinaryU32(unsigned int ** _data,unsigned long * _dlen,FILE * fp);
 void ReadVtsAsciiF32(float ** _data,unsigned long * _dlen,FILE * fp);
 void VtsLoad(VtsInfo * _vfp,FILE * fp);
 int VtsFrameHeadLoad(VtsInfo * _vsp,FILE *fp);

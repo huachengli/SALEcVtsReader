@@ -54,5 +54,6 @@ void vtk_point_data_header_with_attr(FILE *fp, const char * attr);
 void vtp_file_header(FILE *fp, int num_pts);
 void vtp_file_trailer(FILE *fp);
 void vtk_dataarray_vec_f(FILE *fp, const char * name, const char * vtk_format, const float * dataarray, int len_dataarray, int n_component);
+void vtk_dataarray_vec_f2(FILE *fp, const char * name, const char * vtk_format, const char * data_type, const float * dataarray, int len_dataarray, int n_component);
 void vtk_point_trailer(FILE *fp);
 #endif //SALE_REBUILD_OUTPUT_H

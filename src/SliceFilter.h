@@ -38,6 +38,7 @@ typedef struct SliceFilerImpl
 typedef SliceFilter slice_filter;
 
 int GetSliceDataC(SALEcData * _sdata, SliceFilter * _out, unsigned long Id);
+int GetSliceDataV(SALEcData * _sdata, SliceFilter * _out, unsigned long Id);
 void CleanSlice(SliceFilter * _out);
 void SetSliceMask(SALEcData * _sdata, SliceFilter * _out,int (*_search)(VtsInfo *, VTSDATAFLOAT *, int *,VTSDATAFLOAT*));
 int WriteSliceDataAll(SALEcData * _sdata, SliceFilter * _out, const char * _out_name);
