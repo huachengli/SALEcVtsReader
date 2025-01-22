@@ -88,7 +88,6 @@ int convert_lolatxt(int nx, int ny, int strip,const char * in, const char * out)
         }
     }
 
-
     FILE * vfp = fopen(out,"w");
     assert(vfp!=NULL);
     char whole_extent[4096], piece_extent[4096];

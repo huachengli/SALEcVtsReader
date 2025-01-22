@@ -4,7 +4,6 @@
 
 #include "ejecta_analysis.h"
 
-
 int load_ejecta_collect(ejecta_collect * _ec, int step)
 {
     int new_ejecta_num = 0;
@@ -86,7 +85,6 @@ int ejecta_collect_push(ejecta_collect * _ec, ejecta_t * _e)
 int ejecta_collect_test_init(ejecta_collect * _ec)
 {
     _ec->nproc = 490;
-//    strcpy(_ec->prefix,"/public/home/huachengli/test-SALEc2-dev/C420_12_60-job129/ejecta/bm");
     strcpy(_ec->prefix,"./ejecta/bm");
     _ec->len_allocated = 256*256;
     _ec->data = malloc(sizeof(ejecta_t)*_ec->len_allocated);

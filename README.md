@@ -25,6 +25,7 @@ example of input
 ##### [UPDATING]: add VtpTracer.c (30/07/2024)
 analysis 2d crater tracers from vtp data
 usage:
+
     $VtpTracer -[option] [option args]
     -d [data directory]
         set the datafile directoty, DEFAULT is current path

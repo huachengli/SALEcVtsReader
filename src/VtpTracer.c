@@ -663,7 +663,7 @@ int FlushGridTracerFromVtp(GridTracer * gtf, VtpFile * vfp)
         if(matid < 0.){
             gtf->ejecta_num ++;
             if(gtf->mask[index] == 0) fresh_deteced++;
-            if(gtf->mask[index] >= 2.0) continue; // this tracer have been tracked with enough time step.
+            if(gtf->mask[index] >= 1.0) continue; // this tracer have been tracked with enough time step.
             gtf->mask[index] += 1.0f;
             float gz = (float)(-1.0*gtf->gz);
             float land_delay_time = (vel[1] + sqrtf(vel[1]*vel[1] + 2*gz*pos[1]))/gz;
@@ -726,6 +726,10 @@ int WriteGridTracer(GridTracer * gtf, const char * vts_name)
     vtk_dataarrayf(fp,"id","binary",gtf->id,gtf->len);
     vtk_dataarrayf(fp,"eX","binary",gtf->ejecta_X,gtf->len);
     vtk_dataarrayf(fp,"eT","binary",gtf->ejecta_T,gtf->len);
+    vtk_dataarrayf(fp,"eU","binary",gtf->ejecta_U,gtf->len);
+    vtk_dataarrayf(fp,"eV","binary",gtf->ejecta_V,gtf->len);
+    vtk_dataarrayf(fp,"x0","binary",gtf->ejecta_x,gtf->len);
+    vtk_dataarrayf(fp,"t0","binary",gtf->ejecta_t,gtf->len);
     vtk_dataarray_vecf(fp,"vel","binary",gtf->vel,gtf->len,3);
     vtk_point_data_trailer(fp);
     vtk_cell_data_header(fp);
@@ -769,7 +773,7 @@ int ExportGridTracerF32Bin(GridTracer * gtf, const char * binprefix)
     float * tmp_eV  = calloc(ejecta_num_hold,sizeof(float));
     float * tmp_et  = calloc(ejecta_num_hold,sizeof(float));
     float * tmp_ex  = calloc(ejecta_num_hold,sizeof(float));
-
+    float * tmp_mpre = calloc(ejecta_num_hold,sizeof(float));
 
     int i = 0;
     for(int k=0;k<ngrid;++k)
@@ -783,6 +787,7 @@ int ExportGridTracerF32Bin(GridTracer * gtf, const char * binprefix)
         tmp_eV[i] = gtf->ejecta_V[k];
         tmp_et[i] = gtf->ejecta_t[k];
         tmp_ex[i] = gtf->ejecta_x[k];
+        tmp_mpre[i] = gtf->mpre[k];
         i++;
     }
 
@@ -803,7 +808,8 @@ int ExportGridTracerF32Bin(GridTracer * gtf, const char * binprefix)
     f32ArrayTofile(tmp_et,ejecta_num_hold,tmp_name);
     snprintf(tmp_name,MaxStrLen,"%s.ex.%04d.bin",binprefix,gtf->step);
     f32ArrayTofile(tmp_ex,ejecta_num_hold,tmp_name);
-
+    snprintf(tmp_name,MaxStrLen,"%s.mp.%04d.bin",binprefix,gtf->step);
+    f32ArrayTofile(tmp_mpre,ejecta_num_hold,tmp_name);
 
     free(tmp_eX);
     free(tmp_eT);
@@ -813,7 +819,7 @@ int ExportGridTracerF32Bin(GridTracer * gtf, const char * binprefix)
     free(tmp_eV);
     free(tmp_et);
     free(tmp_ex);
-
+    free(tmp_mpre);
 
     return ejecta_num_hold;
 }
