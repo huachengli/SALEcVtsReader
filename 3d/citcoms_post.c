@@ -1,12 +1,16 @@
 //
 // Created by huachengli on 10/22/24.
 //
+// calculate melt volume/ crust thickness on sphere
+// write results to vtm/vts
+// read parameters from post.inp
+// [citcoms]
 
 #include "citcoms_related.h"
 
 int main(int argc,char * argv[])
 {
-    char inp_file[4096] = "post.inp";
+    char inp_file[4096] = "melt_post.inp";
     switch(argc)
     {
         case 1:
@@ -19,7 +23,6 @@ int main(int argc,char * argv[])
     }
 
     CitcomsData * _cdata = init_citcoms_data(inp_file);
-
     for(int k=_cdata->step0;k<_cdata->step1;k+=_cdata->step_inc)
     {
         load_citcoms_step(_cdata,k);

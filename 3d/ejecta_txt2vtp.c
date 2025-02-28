@@ -27,11 +27,11 @@ int main(int argc,char * argv[])
     InputFile * ifp = OpenInputFile(inp_file);
 
     ejecta_collect EC;
-    // ejecta_collect_test_init(&EC);
     ejecta_collect_init(&EC,ifp);
 
     char ExportStepOpt[4096];
     GetValueSk(ifp,"Ejecta.step",ExportStepOpt,0,"Range");
+    double Rm = GetValueD(ifp, "Ejecta.Rm", "1.74e6");
     int * export_steps;
     int num_export_steps;
     if(strcasecmp(ExportStepOpt,"range") == 0)
@@ -49,6 +49,7 @@ int main(int argc,char * argv[])
         fprintf(stdout,"Unimplemented range opt:%s\n",ExportStepOpt);
         exit(1);
     }
+
     for(int k=0;k<num_export_steps;++k)
     {
         int new_ejecta_num = load_ejecta_collect(&EC,k);
@@ -56,10 +57,9 @@ int main(int argc,char * argv[])
     }
 
     ejecta_collect_to_vtp(&EC,EC.output);
-
     char predictLoc[4096];
-    GetValueS(ifp,"Tracer.loops",predictLoc,"none");
-    if(strcasecmp("none",predictLoc) != 0)
+    GetValueS(ifp,"Ejecta.predictLoc",predictLoc,"none");
+    if(strcasecmp("none",predictLoc) == 0)
     {
         for(int k=0;k<200;++k)
         {
@@ -71,8 +71,25 @@ int main(int argc,char * argv[])
             fflush(stdout);
         }
     }
+    else if (strcasecmp("analytical",predictLoc)==0)
+    {
+        char _vtp_name[1025];
+        snprintf(_vtp_name,1024,"%s.%04d.vtp",predictLoc,1);
+        fprintf(stdout, "use analytical method to calculate landing site\n");
+        analytical_ejecta_orbit_moon(&EC, 1.740e6, 1.622);
+        ejecta_collect_to_vtp(&EC,_vtp_name);
+    }
+
+    citcoms_sphere * _cs = init_citcoms_sphere3(12, 128, 4);
+    const char _prefix[] = "ejecta_txt";
+    set_ring_scope(_cs,"inring.txt");
+    calculate_ejecta_thickness(_cs, &EC, 1.740e6);
+    write_citcoms_sphere(_cs,NULL, _prefix);
+
     fprintf(stdout,"\n %d ejecta detected\n",EC.len);
     ejecta_collect_test_clean(&EC);
+    clean_citcoms_sphere(_cs);
+
     free(export_steps);
     CloseInputFile(ifp);
     return 1;

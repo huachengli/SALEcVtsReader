@@ -3,7 +3,7 @@
 //
 
 #include "ejecta_analysis.h"
-
+#include "omp.h"
 int load_ejecta_collect(ejecta_collect * _ec, int step)
 {
     int new_ejecta_num = 0;
@@ -17,15 +17,23 @@ int load_ejecta_collect(ejecta_collect * _ec, int step)
             continue;
         }
         ejecta_t tmp_e;
-        while(14 == fscanf(fp,"%d, %d, %d, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf",
-                         &(tmp_e.id),&(tmp_e.rank), &(tmp_e.matid),&(tmp_e.t),
+        int NeE;
+        while(15 == fscanf(fp,"%d, %d, %d, %d, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf",
+                         &(tmp_e.id),&(tmp_e.rank), &(tmp_e.matid), &(NeE),&(tmp_e.t),
                          tmp_e.pos,tmp_e.pos+1,tmp_e.pos+2,
                          &(tmp_e.maxpre),&(tmp_e.maxtem),
                          tmp_e.vel, tmp_e.vel+1, tmp_e.vel+2,
                          &(tmp_e.pre),&(tmp_e.tem)
                          ))
+        // while(14 == fscanf(fp,"%d, %d, %d,  %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf",
+        //                    &(tmp_e.id),&(tmp_e.rank), &(tmp_e.matid), &(tmp_e.t),
+        //                    tmp_e.pos,tmp_e.pos+1,tmp_e.pos+2,
+        //                    &(tmp_e.maxpre),&(tmp_e.maxtem),
+        //                    tmp_e.vel, tmp_e.vel+1, tmp_e.vel+2,
+        //                    &(tmp_e.pre),&(tmp_e.tem)
+        // ))
         {
-             ejecta_collect_push(_ec,&tmp_e);
+            ejecta_collect_push(_ec,&tmp_e);
             new_ejecta_num++;
         }
 
@@ -100,6 +108,10 @@ int ejecta_collect_init(ejecta_collect * _ec, InputFile * ifp)
     int npgx = GetValueI(sifp,"processor.npgx","2");
     int npgy = GetValueI(sifp,"processor.npgy","2");
     int npgz = GetValueI(sifp,"processor.npgz","2");
+    double dx = GetValueD(sifp,"mesh.dx","-1.0");
+    double dy = GetValueD(sifp,"mesh.dy","-1.0");
+    double dz = GetValueD(sifp,"mesh.dz","-1.0");
+    _ec->v0 = dx*dy*dz;
     _ec->nproc = npgx*npgy*npgz;
     CloseInputFile(sifp);
 
@@ -187,6 +199,7 @@ int ejecta_collect_to_vtp(ejecta_collect * _ec, const char * vtp_name)
     float * tr_dump = malloc(sizeof(float)*tr_len);
     float * tr_eden = malloc(sizeof(float)*tr_len);
     float * tr_t    = malloc(sizeof(float)*tr_len);
+    float * tr_theta = malloc(sizeof(float)*tr_len);
 
     for(int k =0;k<_ec->len;++k)
     {
@@ -209,6 +222,7 @@ int ejecta_collect_to_vtp(ejecta_collect * _ec, const char * vtp_name)
         tr_etem[k] = _cur->tem;
 
         tr_t[k] = _cur->t;
+        tr_theta[k] = _cur->theta;
 
     }
 
@@ -227,6 +241,7 @@ int ejecta_collect_to_vtp(ejecta_collect * _ec, const char * vtp_name)
     vtk_dataarray_vec_f(fp,"dump",vtp_data_format,tr_dump,tr_len,1);
     vtk_dataarray_vec_f(fp,"den",vtp_data_format,tr_eden,tr_len,1);
     vtk_dataarray_vec_f(fp,"t",vtp_data_format,tr_t,tr_len,1);
+    vtk_dataarray_vec_f(fp,"theta",vtp_data_format,tr_theta,tr_len,1);
     vtk_point_data_trailer(fp);
     vtk_point_header(fp);
     vtk_dataarray_vec_f(fp,"coordinate",vtp_data_format,tr_pos,tr_len,3);
@@ -245,6 +260,157 @@ int ejecta_collect_to_vtp(ejecta_collect * _ec, const char * vtp_name)
     free(tr_dump);
     free(tr_eden);
     free(tr_t);
+    free(tr_theta);
 
     return 1;
 }
+
+int ejecta_collect_to_vtm(ejecta_collect * _ec, const char * _vts_name, int nx)
+{
+    assert(nx >= 4);
+    // create sphere grid
+
+    // calculate sum thickness
+
+    // write to vts/vtm files
+    return 1;
+}
+
+
+double approximate_ejecta(double *x, double *v, double R, double g0)
+{
+    double u = g0*R*R;
+    double h[3];
+    VecCross(h, x, v, 3);
+
+    double h1 = VecLen(h,3), r1 = VecLen(x, 3), v1 = VecLen(v,3);
+    double a = -0.5*u/(-u/r1 + 0.5*v1*v1);
+    if(a <= 0)
+    {
+        // unphysical solution
+        return -2.0;
+    }
+
+    double e = sqrt(1.0 - h1*h1/(a*u));
+    if(e >= 1.0 )
+    {
+        //  parabola or hyper bola
+        return -1.0;
+    }
+
+    double p = a*(1.0 - e*e);
+    double ct1 = (1.0 - p/R)/e, ct0 = (1.0 - p/r1)/e;
+    double Q = acos(ct1) + acos(ct0);
+
+    double xl[3] = {0}; // position of land
+    VecNormalize(h, 3);
+    VecNormalize(x, 3);
+    double HxR[3];
+    VecCross(HxR, h, x, 3);
+    VecLinear(xl, x, cos(Q), HxR, sin(Q), 3);
+    VecAdd(xl, h, (1.0 - cos(Q))* VecDot(h,x,3), 3);
+    VecScale(xl, R, 3);
+
+    double vl[3] = {0};// velocity of land
+    double ne[3] = {0}; // eccentricity vector
+    double HxV[3] = {0};
+    VecCross(HxV, h, v, 3);
+    VecLinear(ne, x, -1.0, HxV, -h1/u, 3);
+
+    double HxE[3] = {0};
+    VecCross(HxE, h, ne, 3);
+    VecLinear(vl, HxE, u/h1, HxR, u/h1, 3);
+
+    // copy result into x,v
+    VecCopy(x, xl, 3);
+    VecCopy(v, vl, 3);
+
+    // normalize x
+    VecNormalize(x, 3);
+    VecScale(x, R, 3);
+    return 1;
+}
+
+void analytical_ejecta_orbit_moon(ejecta_collect * _ec, double R, double g0)
+{
+    for(int k=0;k<_ec->len;++k)
+    {
+        ejecta_t * _cur = _ec->data + k;
+
+        double _pos[3] = {_cur->pos[0], _cur->pos[1], _cur->pos[2] + R};
+        double _vel[3] = {_cur->vel[0], _cur->vel[1], _cur->vel[2]};
+        double _t = approximate_ejecta(_pos, _vel, R, g0);
+        _cur->a = _t;
+        if(_t > 0)
+        {
+            VecCopy(_cur->pos, _pos, 3);
+            VecCopy(_cur->vel, _vel, 3);
+
+            double XxV[3] = {0};
+            VecCross(XxV,_pos, _vel, 3);
+            if(XxV[2] < 0.0)
+            {
+                _cur->theta = atan2(-XxV[2], -XxV[0]) * R;
+            }
+            else
+            {
+                _cur->theta = atan2(XxV[2], XxV[0]) * R;
+            }
+            _cur->pos[2] -= R;
+        }
+        else
+        {
+            VecZero(_cur->pos, 3);
+            VecZero(_cur->vel, 3);
+            _cur->vel[2] = 1.0;
+            _cur->theta = 0.;
+        }
+    }
+}
+
+void calculate_ejecta_thickness(citcoms_sphere * _cs, ejecta_collect * _ec, double R)
+{
+    const double v0 = _ec->v0;
+    const double bandwidth = 20.0e3;
+    const double s0 = bandwidth*bandwidth*M_PI;
+    fprintf(stdout,"v0 is %f km3; %f km\n", v0*1e-9, v0/s0*1e-3);
+    #pragma omp parallel for num_threads(12) shared(_cs,_ec,R) default(none)
+    for(int j=0; j<_cs->nproc_surf; ++j)
+    {
+        citcoms_sphere_dump * _csd = _cs->cap + j;
+        for(int i=0; i<_csd->nno; ++i)
+        {
+            int eid[4] = {0,0,0,0};
+            citcoms_eid(i+1,eid,_csd->nox,_csd->noy,_csd->noz);
+            for(int k=0;k<_ec->len;++k)
+            {
+                ejecta_t *_cur = _ec->data + k;
+                double cpos[3] = {_cur->pos[0], _cur->pos[1], _cur->pos[2] + R};
+                // if(_cur->a < 0)
+                //     continue;
+                double ipos[3] = {R * _csd->pos[3 * i + 0], R * _csd->pos[3 * i + 1], R * _csd->pos[3 * i + 2]};
+                double distance_ki = VecDis(ipos, cpos, 3);
+                if(distance_ki <= bandwidth)
+                {
+                    _csd->pdata[i * _csd->noc + 0] += (float) v0 / s0;
+                    _csd->pdata[i * _csd->noc + 1] += 1.0;
+                }
+            }
+        }
+    }
+
+    for(int j=0; j<_cs->nproc_surf; ++j)
+    {
+        citcoms_sphere_dump * _csd = _cs->cap + j;
+        for(int i=0; i<_csd->nno; ++i)
+        {
+            if(_csd->pdata[i * _csd->noc + _csd->noc - 1] >= 1)
+                _csd->pdata[i * _csd->noc + 0] = 0;
+            /// adjust coordinates
+            _csd->pos[3*i + 0] = R*_csd->pos[3*i + 0];
+            _csd->pos[3*i + 1] = R*_csd->pos[3*i + 1];
+            _csd->pos[3*i + 2] = R*_csd->pos[3*i + 2] - R;
+        }
+    }
+}
+

@@ -229,12 +229,16 @@ citcoms_sphere * init_citcoms_sphere(citcoms_dump * _cd, int noc)
             _cs->cap[k].pdata[j] = 8.0f;
         citcoms_sphere_dump * _csd = _cs->cap + k;
         _csd->area = _csd->marker = NULL;
+        _csd->pmarker = NULL;
     }
     return _cs;
 }
 
 citcoms_sphere * init_citcoms_sphere2(CitcomsData * _cd, int noc)
 {
+    /*
+     * add calculation of area
+     */
     citcoms_sphere * _cs = (citcoms_sphere *) malloc(sizeof(citcoms_sphere));
     assert(NULL != _cs);
     /// copy metadata from _cd
@@ -302,6 +306,12 @@ citcoms_sphere * init_citcoms_sphere2(CitcomsData * _cd, int noc)
         _cs->cap[k].marker = (float *) malloc(sizeof(float) * nel * 4);
         for(int j=0;j<4*nel;++j)
             _cs->cap[k].marker[j] = 0.0f;
+
+        /// set marker on point
+        _cs->cap[k].pmarker = (float *) malloc(sizeof(float) * nno);
+        for(int j=0;j<nno;++j)
+            _cs->cap[k].pmarker[j] = 0.0f;
+
         /// record surface area
         citcoms_sphere_dump * _csd = _cs->cap + k;
         _cs->cap[k].area = (float *) malloc(sizeof(float) * nel);
@@ -338,6 +348,228 @@ citcoms_sphere * init_citcoms_sphere2(CitcomsData * _cd, int noc)
     }
     return _cs;
 }
+
+void pg_sphere_coordinates(const double * xl, double pos[], const double P[][3], const double Q[][3])
+{
+    double xld = xl[0];
+    double yld = xl[1];
+    double Pm[3] = {0};
+    VecLinear(Pm,P[2],xld*xld,P[1],xld,3);
+    VecAdd(Pm,P[0],1.0,3);
+    double Qm[3] = {0};
+    VecLinear(Qm,Q[2],yld*yld,Q[1],yld,3);
+    VecAdd(Qm,Q[0],1.0,3);
+
+    double Rm[3] = {0};
+    VecCross(Rm,Pm,Qm,3);
+    VecNormalize(Rm,3);
+    VecCopy(pos, Rm, 3);
+}
+
+int set_citcoms_sphere_coord(citcoms_sphere * _cs, int mcap)
+{
+    citcoms_sphere_dump * _cap_data = _cs->cap + mcap;
+    /// set corner spherical coordinates
+    typedef struct SphereCoord
+    {
+        double theta[5];
+        double fi[5];
+        double P[3][3];
+        double Q[3][3];
+        double R[3];
+    } scoord;
+    scoord _cap[13];
+    float offset = 9.736 / 180.0 * M_PI;
+    for(int i = 1; i <= 4; i++)
+    {
+        _cap[(i - 1) * 3 + 1].theta[1] = 0.0;
+        _cap[(i - 1) * 3 + 1].theta[2] = M_PI / 4.0 + offset;
+        _cap[(i - 1) * 3 + 1].theta[3] = M_PI / 2.0;
+        _cap[(i - 1) * 3 + 1].theta[4] = M_PI / 4.0 + offset;
+        _cap[(i - 1) * 3 + 1].fi[1] = 0.0;
+        _cap[(i - 1) * 3 + 1].fi[2] = (i - 1) * M_PI / 2.0;
+        _cap[(i - 1) * 3 + 1].fi[3] = (i - 1) * M_PI / 2.0 + M_PI / 4.0;
+        _cap[(i - 1) * 3 + 1].fi[4] = i * M_PI / 2.0;
+        _cap[(i - 1) * 3 + 2].theta[1] = M_PI / 4.0 + offset;
+        _cap[(i - 1) * 3 + 2].theta[2] = M_PI / 2.0;
+        _cap[(i - 1) * 3 + 2].theta[3] = 3 * M_PI / 4.0 - offset;
+        _cap[(i - 1) * 3 + 2].theta[4] = M_PI / 2.0;
+        _cap[(i - 1) * 3 + 2].fi[1] = i * M_PI / 2.0;
+        _cap[(i - 1) * 3 + 2].fi[2] = i * M_PI / 2.0 - M_PI / 4.0;
+        _cap[(i - 1) * 3 + 2].fi[3] = i * M_PI / 2.0;
+        _cap[(i - 1) * 3 + 2].fi[4] = i * M_PI / 2.0 + M_PI / 4.0;
+    }
+
+    for(int i = 1; i <= 4; i++)
+    {
+        int j = (i - 1) * 3;
+        if(i == 1)
+            j = 12;
+        _cap[j].theta[1] = M_PI / 2.0;
+        _cap[j].theta[2] = 3 * M_PI / 4.0 - offset;
+        _cap[j].theta[3] = M_PI;
+        _cap[j].theta[4] = 3 * M_PI / 4.0 - offset;
+        _cap[j].fi[1] = (i - 1) * M_PI / 2.0 + M_PI / 4.0;
+        _cap[j].fi[2] = (i - 1) * M_PI / 2.0;
+        _cap[j].fi[3] = 0.0;
+        _cap[j].fi[4] = i * M_PI / 2.0;
+    }
+
+    // set projection/coordinate in cartesian coordinate
+    for(int cap_id = 1; cap_id <= _cs->nproc_surf; ++cap_id)
+    {
+        double cap_corner[4][3] = {0};
+        for(int i = 1; i <= 4; i++)
+        {
+            cap_corner[i - 1][0] = sin(_cap[cap_id].theta[i]) * cos(_cap[cap_id].fi[i]);
+            cap_corner[i - 1][1] = sin(_cap[cap_id].theta[i]) * sin(_cap[cap_id].fi[i]);
+            cap_corner[i - 1][2] = cos(_cap[cap_id].theta[i]);
+        }
+
+        // rotate the corner for compatibility with full_node_location
+        double ro = -0.5 * (M_PI / 4.0) / _cap_data->nox;
+        double fo = 0.0;
+        for(int i = 1; i <= 4; i++)
+            VecRotate(cap_corner[i - 1], ro, fo, 3);
+
+        double P2[3], P1[3], P0[3];
+        double Q2[3], Q1[3], Q0[3];
+
+        set_projection_axis(P2, P1, P0, cap_corner[3], cap_corner[0], cap_corner[1], cap_corner[2]);
+        set_projection_axis(Q2, Q1, Q0, cap_corner[0], cap_corner[1], cap_corner[2], cap_corner[3]);
+
+        VecCopy(_cap[cap_id].P[0], P0, 3);
+        VecCopy(_cap[cap_id].P[1], P1, 3);
+        VecCopy(_cap[cap_id].P[2], P2, 3);
+        VecCopy(_cap[cap_id].Q[0], Q0, 3);
+        VecCopy(_cap[cap_id].Q[1], Q1, 3);
+        VecCopy(_cap[cap_id].Q[2], Q2, 3);
+
+        double R0[3] = {0, 0, 0};
+        for(int k = 0; k < 4; ++k)
+            VecAdd(R0, cap_corner[k], 0.25, 3);
+        VecNormalize(R0, 3);
+        VecCopy(_cap[cap_id].R, R0, 3);
+    }
+
+    // set coordinates of mcap
+    for(int zid = 1; zid <= _cap_data->noz; ++zid)
+    {
+        for(int xid = 1; xid <= _cap_data->nox; ++xid)
+        {
+            for(int yid = 1; yid <= _cap_data->noy; ++yid)
+            {
+                const int n3 = citcoms_offset(xid,yid,zid,_cap_data->nox,_cap_data->noy,_cap_data->noz)-1;
+                const int n2 = citcoms_offset(xid,yid,1,_cap_data->nox,_cap_data->noy,1)-1;
+                double xl[3] = {
+                        (xid-1.0)/(_cap_data->nox-1.0),
+                        (yid-1.0)/(_cap_data->noy-1.0),
+                        (zid-1.0)/(_cap_data->noz-1.0)
+                };
+                double pos[3] = {0.0};
+                pg_sphere_coordinates(xl, pos, _cap[mcap+1].P, _cap[mcap+1].Q);
+                _cap_data->pos[3*n2+ 0] = (float) pos[0];
+                _cap_data->pos[3*n2+ 1] = (float) pos[1];
+                _cap_data->pos[3*n2+ 2] = (float) pos[2];
+            }
+        }
+    }
+    return 0;
+}
+
+citcoms_sphere * init_citcoms_sphere3(int npx, int nx, int noc)
+{
+    /*
+     * set coordinates manually, not copy from existed dump files
+     */
+    citcoms_sphere * _cs = (citcoms_sphere *) malloc(sizeof(citcoms_sphere));
+    assert(NULL != _cs);
+    /// copy metadata from _cd
+    _cs->nproc_surf = 12;
+    _cs->nproc = npx*npx*1;
+    _cs->nprocx = npx;
+    _cs->nprocy = npx;
+    _cs->nprocz = 1;
+    /// allocate memory for sphere
+    assert(noc >= 1);
+    assert(_cs->nproc_surf >= 1);
+    _cs->cap = (citcoms_sphere_dump *)malloc(sizeof(citcoms_sphere_dump)*_cs->nproc_surf);
+
+    /// allocate sphere
+    for(int k=0; k< _cs->nproc_surf; ++k)
+    {
+        const int nox = nx;
+        const int noy = nx;
+        const int noz = nx;
+        const int nel = (nox - 1) * (noy - 1);
+        const int nno = nox * noy;
+
+        _cs->cap[k].pos = (float *) malloc(sizeof(float) * nno * 3);
+        _cs->cap[k].data = (float *) malloc(sizeof(float) * nel * noc);
+        _cs->cap[k].pdata = (float *) malloc(sizeof(float) * nno * noc);
+
+        _cs->cap[k].nno = nno;
+        _cs->cap[k].nel = nel;
+        _cs->cap[k].noc = noc;
+        _cs->cap[k].nox = nox;
+        _cs->cap[k].noy = noy;
+        _cs->cap[k].noz = noz;
+
+        const int kz = noz - 1;
+        set_citcoms_sphere_coord(_cs, k);
+
+        /// set initial value of data to 0.
+        for(int j=0;j<noc*nel;++j)
+            _cs->cap[k].data[j] = 0.0f;
+        for(int j=0;j<noc*nno;++j)
+            _cs->cap[k].pdata[j] = 0.0f;
+
+        _cs->cap[k].marker = (float *) malloc(sizeof(float) * nel * 4);
+        for(int j=0;j<4*nel;++j)
+            _cs->cap[k].marker[j] = 0.0f;
+        /// set marker on point
+        _cs->cap[k].pmarker = (float *) malloc(sizeof(float) * nno);
+        for(int j=0;j<nno;++j)
+            _cs->cap[k].pmarker[j] = 0.0f;
+
+        /// record surface area
+        citcoms_sphere_dump * _csd = _cs->cap + k;
+        _cs->cap[k].area = (float *) malloc(sizeof(float) * nel);
+        for(int ix=0;ix<nox-1;++ix)
+        {
+            for(int jy=0;jy<noy-1;++jy)
+            {
+                int eid[4] = {0, ix+1, jy+1, 1};
+                int n2ien[4] = {citcoms_offset(eid[1]+1,eid[2]+1,eid[3]+0,nox, noy, 1) - 1,
+                                citcoms_offset(eid[1]+0,eid[2]+1,eid[3]+0,nox, noy, 1) - 1,
+                                citcoms_offset(eid[1]+0,eid[2]+0,eid[3]+0,nox, noy, 1) - 1,
+                                citcoms_offset(eid[1]+1,eid[2]+0,eid[3]+0,nox, noy, 1) - 1};
+                const int n2 = citcoms_offset(ix+1,jy+1,1,nox-1,noy-1,1)-1;
+
+                double Xg[4][3];
+                for(int j=0; j<4; ++j)
+                {
+                    for(int i=0; i<3; ++i)
+                    {
+                        Xg[j][i] = _csd->pos[3*n2ien[j] + i];
+                    }
+                }
+
+                double res[4];
+                DeriveArea(Xg, res);
+                _csd->area[n2] = VecLen(res,3);
+            }
+        }
+        _csd->vstat = (float *) malloc(sizeof(float) * noz * noc * _cs->nprocz);
+        for(int j=0;j<noc*noz*_cs->nprocz;++j)
+        {
+            _csd->vstat[j] = 0.;
+        }
+    }
+    return _cs;
+}
+
+
 
 int clean_citcoms_sphere(citcoms_sphere * _cs)
 {
@@ -1329,6 +1561,21 @@ int citcoms_offset(int i, int j, int k, int nx, int ny, int nz)
     return k + nz*(i-1) + nz*nx*(j-1);
 }
 
+int citcoms_eid(int n, int eid[], int nx, int ny, int nz)
+{
+    n = n - 1;
+    int k = n % nz  + 1;
+    int i = (n / nz) % nx + 1;
+    int j = n / (nx * nx) + 1;
+    eid[1] = i;
+    eid[2] = j;
+    eid[3] = k;
+    assert(1 <= i && i <= nx);
+    assert(1 <= j && j <= ny);
+    assert(1 <= k && k <= nz);
+    return 0;
+}
+
 
 void tracer_finder_init(tracer_finder * _tf,citcoms_dump * _cd,int p[4])
 {
@@ -1548,9 +1795,47 @@ CitcomsData * init_citcoms_data(const char * input)
 
     strcpy(_cdata->OutPrefix,citcoms_output_path);
 
+    char sol_liq_dir[2048], sol_liq_file[1024];
+    GetValueS(ifp,"mesh.sol_liq_file",sol_liq_file,"unknown");
+    GetValueS(ifp,"mesh.sol_liq_dir",sol_liq_dir,"unknown");
+    snprintf(_cdata->sol_liq_file, 4096, "%s/%s", sol_liq_dir, sol_liq_file);
+
+    int ibuoy_type = GetValueI(ifp, "mesh.ibuoy_type", "1");
+    int nflavors = GetValueI(ifp,"mesh.tracer_flavors","1");
+
+    _cdata->ncomp = nflavors;
+    _cdata->tscomp_ff = malloc(sizeof(double)*nflavors);
+
+    char tscomp_ff_value[4096];
+    GetValueS(ifp, "mesh.tscomp_ff",tscomp_ff_value,"0,0");
+    char _tmp[4096];
+    int r = 0;
+    if(ibuoy_type == 1)
+    {
+        _cdata->tscomp_ff[0] = 0;
+        for(int k=1; k<nflavors; ++k)
+        {
+            r += Strok(tscomp_ff_value+r,",",_tmp);
+            _cdata->tscomp_ff[k] = atof(_tmp);
+            // fprintf(stdout,"%s: tscomp_ff[%d] = %f\n",__func__,k,_cdata->tscomp_ff[k]);
+        }
+    }
+    else
+    {
+        for(int k=0; k<nflavors; ++k)
+        {
+            r += Strok(tscomp_ff_value+r,",",_tmp);
+            _cdata->tscomp_ff[k] = atof(_tmp);
+            // fprintf(stdout,"%s: tscomp_ff[%d] = %f\n",__func__,k,_cdata->tscomp_ff[k]);
+        }
+    }
+
     char datafile[4096];
     GetValueS(ifp,"mesh.datafile",datafile,"a");
     snprintf(_cdata->VtsPrefix,4096,"%s/%s",citcoms_data_path,datafile);
+    snprintf(_cdata->datafile,4096,"%s",datafile);
+    snprintf(_cdata->datapath,4096,"%s",citcoms_data_path);
+    GetValueS(cfp,"melt.output",_cdata->melt_post_dir,"post");
     CloseInputFile(cfp);
     CloseInputFile(ifp);
 
@@ -1567,6 +1852,17 @@ int load_citcoms_step(CitcomsData * _cdata, int step)
         char vts_name[4096];
         snprintf(vts_name,4096,"%s.proc%d.%d.vts",_cdata->VtsPrefix,k,step);
         FILE * fp = fopen(vts_name,"r");
+        if(fp == NULL)
+        {
+            snprintf(vts_name,4096,"%s/vts/%s.proc%d.%d.vts",_cdata->datapath,_cdata->datafile,k,step);
+            fp = fopen(vts_name,"r");
+        }
+        if(fp == NULL)
+        {
+            fprintf(stdout,"cannot open vts file %s/vts/%s.proc%d.%d.vts or %s.proc%d.%d.vts\n",
+                    _cdata->datapath,_cdata->datafile,k,step,_cdata->VtsPrefix,k,step);
+        }
+
         VtsLoad(_cdata->VSF+k, fp);
         fclose(fp);
     }
@@ -1601,7 +1897,6 @@ int load_citcoms_step(CitcomsData * _cdata, int step)
             k_attach++;
         }
     }
-
     fclose(fp);
     return _cdata->nproc;
 }
@@ -1620,5 +1915,290 @@ int clean_citcoms_data(CitcomsData * _cdata)
 int close_citcoms_data(CitcomsData * _cdata)
 {
     free(_cdata);
+    return 0;
+}
+
+int bSearch(double _target,const double * _list,int _len)
+{
+    /*
+     * LHC note
+     * binary search, _list must be monotonically grow
+     */
+    double tol = 1e-8;
+    int _lt = 0,_rt = _len-1;
+    if(_target<_list[_lt] - tol)
+    {
+        return 0;
+    }
+    else if(_list[_rt] + tol <_target)
+    {
+        return _len-2;
+    }
+
+    while(_lt+1<_rt)
+    {
+        int _mt = (_lt+_rt)/2;
+        if(_target < _list[_mt])
+            _rt = _mt;
+        else
+            _lt = _mt;
+    }
+    return _lt;
+}
+
+int get_txt_line_number(const char * txt)
+{
+    FILE * fp = fopen(txt,"r");
+    if(NULL == fp) return -1;
+    char buffer[4096];
+    int line_count = 0;
+    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+        line_count++;
+    }
+    fclose(fp);
+    return line_count;
+}
+
+void load_txt_aligned(const char * txt, const double * x, double * y, int nx, int x_col, int y_col, int n_col, int header_skip)
+{
+    assert(x_col >= 0  && y_col >= 0 && n_col >= 0);
+    int lines = get_txt_line_number(txt);
+    assert(lines >= 1);
+
+    double * txt_x = (double *)malloc(sizeof(double) * lines);
+    double * txt_y = (double *)malloc(sizeof(double) * lines);
+    int txt_k = 0;
+
+    assert(x != NULL && y != NULL);
+    assert(nx >= 2);
+
+    FILE * fp = fopen(txt,"r");
+    assert(fp != NULL);
+
+    int k_line = 0;
+    char buffer[4096];
+
+    while(fgets(buffer, sizeof(buffer), fp) != NULL){
+        k_line++;
+        if(k_line <= header_skip) continue;
+        char * token = NULL;
+        for(int k=0; k<n_col; ++ k)
+        {
+            if(0 == k)
+                token = strtok(buffer, " , ");
+            else
+                token = strtok(NULL, " , ");
+
+            if(k == x_col)
+                txt_x[txt_k] = strtod(token,NULL);
+            else if(k==y_col)
+                txt_y[txt_k] = strtod(token,NULL);
+        }
+        txt_k++;
+    }
+
+    assert(txt_k + header_skip == lines);
+    // check monotonicity of txt file, the data x should be increase
+    for(int k=0;k<txt_k-1;++k)
+    {
+        if(txt_x[k+1] <= txt_x[k])
+        {
+            fprintf(stderr,"%s: check monotonicity of txt(%s) failed.\n",__func__,txt);
+            exit(9);
+        }
+    }
+
+    for(int k=0; k<nx;++k)
+    {
+        int iL = bSearch( x[k], txt_x, txt_k);
+        int iR = iL + 1;
+        double xl = (x[k] - txt_x[iL])/(txt_x[iR] - txt_x[iL]);
+        y[k] = (1.0 - xl)*txt_y[iL] + xl*txt_y[iR];
+    }
+
+    free(txt_x);
+    free(txt_y);
+    fclose(fp);
+}
+
+int init_sol_liq_prof(CitcomsData * _cdata)
+{
+    if(_cdata == NULL || _cdata->VSF == NULL)
+    {
+        fprintf(stdout,"%s: citcoms data should be loaded before set liq/sol temperature information\n",__func__);
+        return 1;
+    }
+    /// build r coordinate line from vts file
+    _cdata->gr = (double *) malloc(sizeof(double)*_cdata->nprocz*_cdata->noz);
+    memset(_cdata->gr,0,sizeof(double)*_cdata->nprocz*_cdata->noz);
+
+    for(int k=0;k<_cdata->nprocz;++k)
+    {
+        VtsInfo * _vsf = _cdata->VSF + k;
+        const unsigned int coord_fId = find_pointfield("coordinate",_vsf);
+        assert(coord_fId < 100);
+        const float * points = _vsf->PointField[coord_fId].Data;
+
+        int ix=1,jy=1;
+        for(int kz=0;kz<_cdata->noz;++kz)
+        {
+            int iv = citcoms_offset(1,1,kz+1,_cdata->nox, _cdata->noy, _cdata->noz)-1;
+            float rlen = VecLenF(points + 3*iv, 3);
+            _cdata->gr[(_cdata->noz-1)*k + kz] = rlen;
+        }
+    }
+
+    /// allocate mem for sol/liq
+    _cdata->sol = (double *) malloc(sizeof(double)*_cdata->nprocz*_cdata->noz);
+    _cdata->liq = (double *) malloc(sizeof(double)*_cdata->nprocz*_cdata->noz);
+    memset(_cdata->sol,0,sizeof(double)*_cdata->nprocz*_cdata->noz);
+    memset(_cdata->liq,0,sizeof(double)*_cdata->nprocz*_cdata->noz);
+
+    load_txt_aligned(_cdata->sol_liq_file,_cdata->gr,_cdata->sol,_cdata->nprocz*(_cdata->noz-1)+1,0,1,4,0);
+    load_txt_aligned(_cdata->sol_liq_file,_cdata->gr,_cdata->liq,_cdata->nprocz*(_cdata->noz-1)+1,0,2,4,0);
+    return 0;
+}
+
+
+int update_melting(CitcomsData * _cdata)
+{
+    unsigned int comp_fId[32];
+    int nno = _cdata->nno;
+    int nox = _cdata->nox, noy = _cdata->noy, noz=_cdata->noz;
+    int ncomp = _cdata->ncomp;
+    for(int k=0;k<ncomp;++k)
+    {
+        char _cname[256];
+        snprintf(_cname,256,"composition%d",k);
+        comp_fId[k] = find_pointfield(_cname,_cdata->VSF);
+        assert(comp_fId[k]<100);
+    }
+    unsigned int coordfId = find_pointfield("coordinate",_cdata->VSF);
+    assert(coordfId<100);
+    unsigned int temfId = find_pointfield("temperature",_cdata->VSF);
+    assert(temfId<100);
+
+    for(int k=0;k<_cdata->nproc;++k)
+    {
+        VtsInfo * _vsf = _cdata->VSF + k;
+        /// add update_melt
+        unsigned melt2fId = _vsf->PointNoF;
+        _vsf->PointNoF++;
+        _vsf->PointField[melt2fId].Data = malloc(sizeof(VTSDATAFLOAT)*(nno+1));
+        strcpy(_vsf->PointField[melt2fId].Name,"melt2");
+        _vsf->PointField[melt2fId].NoC = 1;
+        _vsf->PointField[melt2fId].DataLen = nno;
+
+        float *comp_alpha[32];
+        for(int j=0;j<ncomp;++j)
+        {
+            comp_alpha[j] = _vsf->PointField[comp_fId[j]].Data;
+        }
+        float * position = _vsf->PointField[coordfId].Data;
+        float * temperature = _vsf->PointField[temfId].Data;
+
+        for(int j=0;j<nno;++j)
+        {
+            double Ts=0, Tl=0, Ts_diff=0;
+            int eid[4] = {0};
+            citcoms_eid(j+1, eid, nox, noy, noz);
+            float rj = VecLenF(position + 3*j,3);
+            int i = bSearch(rj,_cdata->gr,_cdata->nprocz*(_cdata->noz-1)+1);
+            double xli = (rj - _cdata->gr[i])/(_cdata->gr[i+1] - _cdata->gr[i]);
+
+            Ts = (1.0 - xli)*_cdata->sol[i] + xli*_cdata->sol[i+1];
+            Tl = (1.0 - xli)*_cdata->liq[i] + xli*_cdata->liq[i+1];
+            for(int c=0;c<ncomp;++c)
+            {
+                Ts_diff += comp_alpha[c][j] * _cdata->tscomp_ff[c];
+            }
+            Ts += Ts_diff;
+            Tl += Ts_diff;
+            double melt = (temperature[j] - Ts)/(Tl - Ts);
+            melt = Wind(melt,0,1);
+            _vsf->PointField[melt2fId].Data[j] = melt;
+            // if(xli > 1 || xli<0)
+            // {
+            //     fprintf(stdout,"%d:%d r=%10.5f,gr0=%10.5f,gr1=%10.5f,xli=%10.5f\n",k,j,rj,_cdata->gr[i],_cdata->gr[i+1],xli);
+            // }
+        }
+    }
+    return 0;
+}
+
+int VtsWrite(VtsInfo * _vfp, FILE * fp)
+{
+    char whole_extent[4096], piece_extent[4096];
+    snprintf(whole_extent,4096,"%lu %lu %lu %lu %lu %lu",
+             _vfp->WholeExtent[0][0],_vfp->WholeExtent[0][1],
+             _vfp->WholeExtent[1][0],_vfp->WholeExtent[1][1],
+             _vfp->WholeExtent[2][0],_vfp->WholeExtent[2][1]);
+    snprintf(piece_extent,4096,"%lu %lu %lu %lu %lu %lu",
+             _vfp->PieceExtent[0][0],_vfp->PieceExtent[0][1],
+             _vfp->PieceExtent[1][0],_vfp->PieceExtent[1][1],
+             _vfp->PieceExtent[2][0],_vfp->PieceExtent[2][1]);
+    vts_file_header(fp,piece_extent,whole_extent);
+    vtk_point_data_header(fp);
+    for(int k=0;k<_vfp->PointNoF;++k)
+    {
+        if(strcasecmp(_vfp->PointField[k].Name,"coordinate")==0)
+            continue;
+        vtk_dataarray_vecf(fp,_vfp->PointField[k].Name,"binary",_vfp->PointField[k].Data,
+                           _vfp->PointField[k].DataLen/_vfp->PointField[k].NoC,_vfp->PointField[k].NoC);
+    }
+    vtk_point_data_trailer(fp);
+    vtk_cell_data_header(fp);
+    vtk_cell_data_trailer(fp);
+    vtk_point_header(fp);
+    for(int k=0;k<_vfp->PointNoF;++k)
+    {
+        if(strcasecmp(_vfp->PointField[k].Name,"coordinate")!=0)
+            continue;
+        vtk_dataarray_vecf(fp,_vfp->PointField[k].Name,"binary",_vfp->PointField[k].Data,
+                           _vfp->PointField[k].DataLen/_vfp->PointField[k].NoC,_vfp->PointField[k].NoC);
+    }
+    vtk_point_trailer(fp);
+    vts_file_trailer(fp);
+    fclose(fp);
+    return 1;
+}
+
+
+int write_citcoms_step(CitcomsData * _cdata, int step)
+{
+    try_make_dir(_cdata->melt_post_dir);
+    char vts_dir[4096];
+    snprintf(vts_dir,4096,"%s/vts",_cdata->melt_post_dir);
+    try_make_dir(vts_dir);
+    char vtm_name[4097];
+    snprintf(vtm_name, 4096, "%s/%s.%d.vtm", _cdata->melt_post_dir, _cdata->datafile,step);
+    FILE * vtm_fp = fopen(vtm_name,"w");
+    assert(vtm_fp != NULL);
+
+    const char header[] =
+            "<?xml version=\"1.0\"?>\n"
+            "<VTKFile type=\"vtkMultiBlockDataSet\" version=\"1.0\" compressor=\"vtkZLibDataCompressor\" byte_order=\"LittleEndian\">\n";
+    fputs(header, vtm_fp);
+    for(int k=0;k<_cdata->len_attach;++k)
+    {
+        fputs(_cdata->attach[k], vtm_fp);
+    }
+    fputs("  <vtkMultiBlockDataSet>\n", vtm_fp);
+
+    for(int k=0;k<_cdata->nproc;++k)
+    {
+        VtsInfo * _vsf = _cdata->VSF + k;
+        char vts_name[4097];
+        snprintf(vts_name,4096,"vts/%s.proc%d.%d.vts",_cdata->datafile,k,step);
+        fprintf(vtm_fp, "    <DataSet index=\"%d\" file=\"%s\"/>\n",k,vts_name);
+
+        snprintf(vts_name,4096,"%s/vts/%s.proc%d.%d.vts",_cdata->melt_post_dir,_cdata->datafile,k,step);
+        FILE * vts_fp = fopen(vts_name,"w");
+        VtsWrite(_vsf, vts_fp);
+        // fprintf(stdout,"write vts:%s\n",vts_name);
+    }
+    fputs("  </vtkMultiBlockDataSet>\n", vtm_fp);
+    fputs("</VTKFile>", vtm_fp);
+    fclose(vtm_fp);
     return 0;
 }

@@ -350,6 +350,10 @@ int set_polygon_marker(double * pl, int n, citcoms_sphere * _cs)
         {
             double ipos[3] = {_csd->pos[3*i + 0], _csd->pos[3*i + 1], _csd->pos[3*i + 2]};
             _csd->pdata[i*noc + noc - 1] += check_in_polygon(ipos, pl, n);
+            if(_csd->pmarker != NULL)
+            {
+                _csd->pmarker[i] += check_in_polygon(ipos, pl, n);
+            }
         }
 
         /// set on integral points
@@ -385,6 +389,7 @@ int set_polygon_marker(double * pl, int n, citcoms_sphere * _cs)
                 }
             }
         }
+
     }
     return 0;
 }
@@ -491,6 +496,11 @@ int vts_calculate_effective_depth(citcoms_sphere_dump * _csd, VtsInfo * _vsf, in
     int coord_fId = find_pointfield("coordinate", _vsf);
     int comp1_fId = find_pointfield("composition1",_vsf);
     int melting_fId = find_pointfield("melting",_vsf);
+    int melt2_fId = find_pointfield("melt2",_vsf);
+    if(melt2_fId < 100)
+    {
+        melting_fId = melt2_fId;
+    }
 
     float * points = _vsf->PointField[coord_fId].Data;
     float * crust  = _vsf->PointField[comp1_fId].Data;
@@ -744,6 +754,11 @@ int vts_find_solidify_thickness(citcoms_sphere * _cs, CitcomsData * _cd)
                     VtsInfo * _vsf = _cd->VSF +  _cd->nprocz*cap_id + k;
                     int coord_fId = find_pointfield("coordinate", _vsf);
                     int melting_fId = find_pointfield("melting",_vsf);
+                    int melt2_fId = find_pointfield("melt2",_vsf);
+                    if(melt2_fId < 100)
+                    {
+                        melting_fId = melt2_fId;
+                    }
 
                     float * points = _vsf->PointField[coord_fId].Data;
                     float * melting = _vsf->PointField[melting_fId].Data;
@@ -796,4 +811,5 @@ int vts_find_solidify_thickness(citcoms_sphere * _cs, CitcomsData * _cd)
                 _csd->data[n2*noc + 4] = (1.0 - _csd->data[n2*noc + 4])*1.74e6;
             }
     }
+    return 0;
 }

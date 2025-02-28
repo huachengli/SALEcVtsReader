@@ -17,6 +17,12 @@ void VecZeroF(float *x, int n)
     for(int k=0;k<n;++k) x[k] = 0.f;
 }
 
+void VecZero(double *x, int n)
+{
+    assert(n >= 1);
+    for(int k=0;k<n;++k) x[k] = 0.;
+}
+
 int VecMaxArgF(const float *x, int n)
 {
     assert(n >= 1);
@@ -72,7 +78,16 @@ float VecDisF(const float *x, const float * y, int n)
     return sqrtf(rst);
 }
 
-
+double VecDis(const double *x, const double *y, int n)
+{
+    assert(n>=1);
+    double rst = 0;
+    for(int k=0;k<n;++k)
+    {
+        rst += (x[k] - y[k])*(x[k] - y[k]);
+    }
+    return sqrt(rst);
+}
 
 double VecScaler(double *x, double p,int n)
 {
@@ -125,6 +140,20 @@ void VecAdd(double *x , const double *y, double p,int n)
     for(int k=0;k<n;++k) x[k] += y[k]*p;
 }
 
+void VecScale(double *x, double px, int n)
+{
+    assert(n>=1 && x!=NULL);
+    for(int k=0;k<n;++k) x[k] *= px;
+}
+
+void VecCopy(double * y, double * x, int n)
+{
+    for(int k=0;k<n;++k)
+    {
+        y[k] = x[k];
+    }
+}
+
 void VecNormalize(double *x, int n)
 {
     double Ln = VecLen(x,n);
@@ -136,6 +165,34 @@ void VecD2F(float *y, const double * x, int n)
 {
     for(int k=0;k<n;++k)
         y[k] = (float) x[k];
+}
+
+void VecRotate(double * x, double ro, double fo, int n)
+{
+    assert(n==3);
+
+    double Rm[4][4], t[3];
+
+    Rm[1][1] = cos(ro) * cos(fo);
+    Rm[1][2] = cos(ro) * sin(fo);
+    Rm[1][3] = -sin(ro);
+    Rm[2][1] = -sin(fo);
+    Rm[2][2] = cos(fo);
+    Rm[2][3] = 0.0;
+    Rm[3][1] = sin(ro) * cos(fo);
+    Rm[3][2] = sin(ro) * sin(fo);
+    Rm[3][3] = cos(ro);
+
+    for(int k=0;k<3;++k)
+    {
+        t[k] = 0;
+        for(int j=0;j<3;++j)
+        {
+            t[k] += Rm[k+1][j+1]*x[j];
+        }
+    }
+    for(int k=0;k<3;++k)
+        x[k] = t[k];
 }
 
 

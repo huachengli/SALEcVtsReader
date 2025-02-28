@@ -22,12 +22,23 @@ typedef struct
     int nprocz;
     char VtsPrefix[4096];
     char OutPrefix[4096];
+    char datafile[4096];
+    char datapath[4096];
     int step0;
     int step1;
     int step_inc;
     VtsInfo * VSF;
     char attach[200][4096];
     int len_attach;
+    char sol_liq_file[4096];
+
+    double * gr;
+    double * sol;
+    double * liq;
+
+    int ncomp;
+    double * tscomp_ff; // sol/liq shift according to composition
+    char melt_post_dir[4096];
 } CitcomsData;
 
 
@@ -60,6 +71,7 @@ typedef struct CitcomsSphereDumpImpl
     int noc;
     int nel;
     float * marker;
+    float * pmarker;
     float * area;
     float * vstat;
 } citcoms_sphere_dump;
@@ -195,6 +207,7 @@ int tracer_mixed_vofcmp(const void * _a, const void * _b);
 void citcoms_tracer_mixed_export(citcoms_tracer_mixed * _ctm, citcoms_dump * _cd, int sid, int len,const char * name);
 
 int citcoms_offset(int i, int j, int k, int nx, int ny, int nz);
+int citcoms_eid(int n, int eid[], int nx, int ny, int nz);
 void tracer_finder_init(tracer_finder * _tf,citcoms_dump * _cd,int p[4]);
 int citcoms_check_tracer_element(citcoms_dump * _cd);
 double solve_local(double * x,double * v2, double * v1, double * v0);
@@ -205,10 +218,15 @@ int SphereIntegrateCitcomsDump(citcoms_dump * _cd, const char * _prefix);
 int SphereIntegrateCitcomsDump2(CitcomsData * _cd, const char * _prefix);
 CitcomsData * init_citcoms_data(const char * input);
 int load_citcoms_step(CitcomsData * _cdata, int step);
+int write_citcoms_step(CitcomsData * _cdata, int step);
 int clean_citcoms_data(CitcomsData * _cdata);
 int close_citcoms_data(CitcomsData * _cdata);
+int init_sol_liq_prof(CitcomsData * _cdata);
+int update_melting(CitcomsData * _cdata);
 
 citcoms_sphere * init_citcoms_sphere2(CitcomsData * _cd, int noc);
+citcoms_sphere * init_citcoms_sphere3(int npx, int nx, int noc);
+int set_citcoms_sphere_coord(citcoms_sphere * _cs, int mcap);
 
 int set_ring_scope(citcoms_sphere * _cs, const char * fname);
 int vts_find_solidify_thickness(citcoms_sphere * _cs, CitcomsData * _cd);

@@ -11,11 +11,14 @@
 #include <memory.h>
 #include "InputParser.h"
 #include "VtkWriter.h"
-
+#include "lmath.h"
+#include "citcoms_related.h"
 
 typedef struct EjectaImpl
 {
     double t;
+    double theta;
+    double a;
     double pos[3];
     double init_pos[3];
     double land_pos[3];
@@ -38,12 +41,16 @@ typedef struct EjectaCollect{
     int min_step_e;
     int max_step_e;
     int nproc;
+    double v0;
     char prefix[4096];
     char output[4096];
+    double R;
     ejecta_t * data;
     int len;
     int len_allocated;
 } ejecta_collect;
+
+
 
 int ejecta_collect_test_init(ejecta_collect * _ec);
 int ejecta_collect_init(ejecta_collect * _ec, InputFile * ifp);
@@ -53,5 +60,8 @@ int load_ejecta_collect_single_file(ejecta_collect * _ec, const char * _tmp_name
 int ejecta_collect_push(ejecta_collect * _ec, ejecta_t * _e);
 int ejecta_collect_to_vtp(ejecta_collect * _ec, const char * vtp_name);
 void numerical_ejecta_orbit_moon(ejecta_collect * _ec, double dt);
+double approximate_ejecta(double *x, double *v, double R, double g0);
+void analytical_ejecta_orbit_moon(ejecta_collect * _ec, double R, double g0);
+void calculate_ejecta_thickness(citcoms_sphere * _cs, ejecta_collect * _ec, double R);
 
 #endif //SALECVTSREADER_EJECTA_ANALYSIS_H
