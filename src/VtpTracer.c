@@ -285,6 +285,86 @@ VtpFile * SALEcVtpCollectPosFuncFilter(VtpTracerCollect * vtc, int (*tf)(const d
     return tmp;
 }
 
+VtpFile * SALEcVtpCollectPosFuncFilter2(VtpTracerCollect * vtc, int (*tf)(const double*,void *),void * ctx)
+{
+    // use different filter func type
+    assert(tf!=NULL);
+
+    int sum_nop_filtered = 0;
+
+    int i_gx=-1, i_gy=-1;
+    for(int k=0;k<vtc->vtp[k]->PointNoF;++k)
+    {
+        if(strcasecmp("gx",vtc->vtp[k]->PointField[k].Name) == 0)
+        {
+            i_gx = k;
+        }
+
+        if(strcasecmp("gy",vtc->vtp[k]->PointField[k].Name) == 0)
+        {
+            i_gy = k;
+        }
+    }
+    assert(i_gx!=-1 && i_gy!=-1);
+
+    #pragma omp parallel for num_threads(LOADTHREADS) shared(vtc,ctx,tf,i_gx,i_gy) reduction(+:sum_nop_filtered) default(none)
+    for(int k=0;k<vtc->NoF;++k)
+    {
+        if(vtc->vtp[k]->NoP == 0)
+            continue;
+        for(int j=0;j<vtc->vtp[k]->NoP;++j)
+        {
+            int gx = (int) roundf(vtc->vtp[k]->PointField[i_gx].Data[j]);
+            int gy = (int) roundf(vtc->vtp[k]->PointField[i_gy].Data[j]);
+            if(gx==-1 && gy==-1)
+                continue;
+
+            VTPDATAFLOAT * vtpx = vtc->vtp[k]->Point;
+            double pos[3] = {vtpx[j*3 + 0], vtpx[j*3 + 1], vtpx[j*3 + 2]};
+            if(tf(pos, ctx)) sum_nop_filtered++;
+        }
+    }
+
+    VtpFile * tmp = NULL;
+    for(int k=0;k<vtc->NoF;++k)
+    {
+        if(vtc->vtp[k]->NoP == 0)
+            continue;
+        if(NULL == tmp){
+            tmp = duplicate_vtp(vtc->vtp[k],sum_nop_filtered);
+        }
+    }
+
+    unsigned long pindex = 0;
+    #pragma omp parallel for num_threads(LOADTHREADS) shared(vtc,ctx,tf,pindex,tmp,sum_nop_filtered,i_gx,i_gy) default(none)
+    for(int k=0;k<vtc->NoF;++k)
+    {
+        if(vtc->vtp[k]->NoP == 0)
+            continue;
+
+        for(int j=0;j<vtc->vtp[k]->NoP;++j)
+        {
+            int gx = (int) roundf(vtc->vtp[k]->PointField[i_gx].Data[j]);
+            int gy = (int) roundf(vtc->vtp[k]->PointField[i_gy].Data[j]);
+            if(gx==-1 && gy==-1)
+                continue;
+
+            VTPDATAFLOAT * vtpx = vtc->vtp[k]->Point;
+            double pos[3] = {vtpx[j*3 + 0], vtpx[j*3 + 1], vtpx[j*3 + 2]};
+            if(tf(pos, ctx)){
+                #pragma omp critical
+                {
+                    copy_vtp_k(tmp,pindex,vtc->vtp[k],j);
+                    pindex++;
+                }
+            }
+        }
+    }
+    VtpCoordinateReshape(tmp);
+    return tmp;
+}
+
+
 
 float dunite_melt(float p, float t)
 {
@@ -393,10 +473,6 @@ VtpFile * VtpGetConnect(VtpFile * in, VtpTracerCollect * vtc,SALEcData * ref)
     }
     return in;
 }
-
-
-
-
 
 unsigned long find_vtpfield(const char * _src, VtpFile * vfp)
 {
@@ -661,7 +737,7 @@ int FlushGridTracerFromVtp(GridTracer * gtf, VtpFile * vfp)
 
         gtf->ejecta_num = 0;
         if(matid < 0.){
-            gtf->ejecta_num ++;
+            gtf->ejecta_num ++; // data race! bugs in multithread.
             if(gtf->mask[index] == 0) fresh_deteced++;
             if(gtf->mask[index] >= 1.0) continue; // this tracer have been tracked with enough time step.
             gtf->mask[index] += 1.0f;
@@ -686,14 +762,16 @@ VtpTracerCollect * FlushVtpTracerCollect(GridTracer * gtf,const char * _prefix, 
     VtpTracerCollect * tmp = malloc(sizeof(VtpTracerCollect));
     tmp->vtp = malloc(sizeof(VtpFile*)*_nof);
     tmp->NoF = _nof;
-#pragma omp parallel for num_threads(8) shared(_nof,_prefix,tmp,gtf) default(none)
+    int fresh_detected = 0;
+#pragma omp parallel for num_threads(8) shared(_nof,_prefix,tmp,gtf) reduction(+:fresh_detected) default(none)
     for(int k=0;k<_nof;++k)
     {
         char _vtpname[MAXNAMELEN];
         snprintf(_vtpname,MAXNAMELEN,_prefix,k);
         tmp->vtp[k] = OpenVtpFile(_vtpname);
-        FlushGridTracerFromVtp(gtf,tmp->vtp[k]);
+        fresh_detected += FlushGridTracerFromVtp(gtf,tmp->vtp[k]);
     }
+    fprintf(stdout,"new:%d",fresh_detected);
     return tmp;
 }
 
@@ -758,11 +836,12 @@ int ExportGridTracerF32Bin(GridTracer * gtf, const char * binprefix)
     {
         if(gtf->mask[k] > 0) ejecta_num_hold++;
     }
-    if(ejecta_num_hold < gtf->ejecta_num)
-    {
-        fprintf(stdout,"tracers(%d) recorded by mask[k] is less than ejecta_num(%d)\n",ejecta_num_hold,gtf->ejecta_num);
-        exit(0);
-    }
+    // if(ejecta_num_hold < gtf->ejecta_num)
+    // {
+    //     fprintf(stdout,"tracers(%d) recorded by mask[k] is less than ejecta_num(%d)\n",ejecta_num_hold,gtf->ejecta_num);
+    //     exit(0);
+    // }
+    fprintf(stdout," ejecta:%d", ejecta_num_hold);
 
     if(ejecta_num_hold <= 0) return 0;
     float * tmp_eX = calloc(ejecta_num_hold,sizeof(float));

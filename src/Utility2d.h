@@ -49,6 +49,7 @@ typedef struct
     unsigned long n;
     VTSDATAFLOAT * pos;
     VTSDATAFLOAT * pos2;
+    int * seg;
 } SALEc2dProfile;
 
 
@@ -68,4 +69,6 @@ double PolynomialLiquid(double pre, const MatRef * _s);
 int GetVsfCellId(VtsInfo * _vsf, const char * TemVsfName);
 void CapLiquidTem(SALEcData * _sdata, SALEcData * _sdata_fill,SALEcPlanetInfo * _pdata);
 VTSDATAFLOAT* Vtm2dGetCellData(SALEcData * _sdata, unsigned long k, unsigned long _i,unsigned long _j);
+
+#define OMP2D_THREADS 32
 #endif //SALECVTSREADER_UTILITY2D_H

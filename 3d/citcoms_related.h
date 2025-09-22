@@ -123,6 +123,16 @@ typedef struct CitcomsDumpImpl
     citcoms_tracer_mixed * mtracer;
 } citcoms_dump;
 
+typedef struct SphereCoord
+{
+    double theta[5];
+    double fi[5];
+    double P[3][3];
+    double Q[3][3];
+    double R[3];
+    double dx;
+} scoord;
+
 typedef struct CitcomsSphereImpl
 {
     int nproc;
@@ -131,6 +141,7 @@ typedef struct CitcomsSphereImpl
     int nprocy;
     int nprocz;
     citcoms_sphere_dump * cap;
+    scoord cap_info[13];
 } citcoms_sphere;
 
 

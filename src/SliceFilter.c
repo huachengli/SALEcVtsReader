@@ -93,6 +93,7 @@ int main(int argc,char * argv[])
         sprintf(DataPath,"%s.proc%%d.%d.vts",DataPrefix,CurrentStep);
         LoadVtsData(SaleData,DataPath);
         fprintf(stdout,"\n");
+        // write max/min of sound to terminal, only used in debug
         // CheckVtsCellField(SaleData,"sound");
         // CheckVtsPointField(SaleData,"velocity");
         for(int k=0;k<SliceNum;k++)
@@ -103,7 +104,15 @@ int main(int argc,char * argv[])
             SetSliceMask(SaleData,OutSlice+k,OffsetSerchV);
             char SliceOutName[MaxStrLen*4];
             sprintf(SliceOutName, "%s.%02d%s.%d.vts", OutPrexfix, k,SliceName[k],CurrentStep);
-            WriteSliceDataAll(SaleData,OutSlice+k,SliceOutName);
+            // Getslicedata is used in WriteSliceDataAll
+            if(strcasecmp(SliceName[k],"XOY")==0 || strcasecmp(SliceName[k],"XOZ")==0 || strcasecmp(SliceName[k],"YOZ")==0)
+            {
+                WriteSliceDataAll(SaleData,OutSlice+k,SliceOutName);
+            }
+            else
+            {
+                WriteSliceDataDerived(SaleData,OutSlice+k,SliceName[k],SliceOutName);
+            }
             CleanSlice(OutSlice+k);
         }
         CleanSALEcData(SaleData);
@@ -201,7 +210,81 @@ int GetSliceDataC(SALEcData * _sdata, SliceFilter * _out, unsigned long Id)
             }
         }
     }
+    return nx*ny;
+}
 
+int GetSliceDataC_BlockId(SALEcData * _sdata, SliceFilter * _out)
+{
+    /// nCL is the vertex number.
+    /// change nx,ny to nCL - 1, revised 2024/11/27
+    VtsInfo * _vsf = _sdata->VSF;
+    _out->Id = 0;
+    _out->NoC = 4;
+    if(NULL != _out->data_vars)
+    {
+        free(_out->data_vars);
+    }
+    _out->data_vars = (VTSDATAFLOAT*) malloc(sizeof(VTSDATAFLOAT)*(_out->nCL[0]*_out->nCL[1])*(_out->NoC));
+
+    int nx = _out->nCL[0]-1, ny = _out->nCL[1]-1;
+
+    for(unsigned long ix=0;ix<nx;ix++)
+    {
+        for(unsigned long jy=0;jy<ny;jy++)
+        {
+            // column array
+            _out->data[ix][jy] =  _out->data_vars + (ix + jy*nx)*(_out->NoC);
+        }
+    }
+    for(unsigned long ix=0;ix<nx;ix++)
+    {
+        for(unsigned long jy=0;jy<ny;jy++)
+        {
+            int BlockId = _out->mask[ix][jy];
+            int BloclIdx = BlockId % _sdata->Npgx[0];
+            int BlockIdy = (BlockId / _sdata->Npgx[0]) % _sdata->Npgx[1];
+            int BlockIdz = (BlockId / _sdata->Npgx[0]) / _sdata->Npgx[1];
+            _out->data[ix][jy][0] = BlockId;
+            _out->data[ix][jy][1] = BloclIdx;
+            _out->data[ix][jy][2] = BlockIdy;
+            _out->data[ix][jy][3] = BlockIdz;
+        }
+    }
+    return nx*ny;
+}
+
+int GetSliceDataC_DX(SALEcData * _sdata, SliceFilter * _out)
+{
+    /// nCL is the vertex number.
+    /// change nx,ny to nCL - 1, revised 2024/11/27
+    VtsInfo * _vsf = _sdata->VSF;
+    _out->Id = 0;
+    _out->NoC = VTSDIM;
+    if(NULL != _out->data_vars)
+    {
+        free(_out->data_vars);
+    }
+    _out->data_vars = (VTSDATAFLOAT*) malloc(sizeof(VTSDATAFLOAT)*(_out->nCL[0]*_out->nCL[1])*(_out->NoC));
+
+    int nx = _out->nCL[0]-1, ny = _out->nCL[1]-1;
+
+    for(unsigned long ix=0;ix<nx;ix++)
+    {
+        for(unsigned long jy=0;jy<ny;jy++)
+        {
+            // column array
+            _out->data[ix][jy] =  _out->data_vars + (ix + jy*nx)*(_out->NoC);
+        }
+    }
+    for(unsigned long ix=0;ix<nx;ix++)
+    {
+        for(unsigned long jy=0;jy<ny;jy++)
+        {
+            VTSDATAFLOAT * x0 = _out->coord[ix][jy];
+            VTSDATAFLOAT * x1 = _out->coord[ix+1][jy+1];
+            v_liner_op(_out->data[ix][jy], 1.0, x1, -1.0, x0);
+        }
+    }
     return nx*ny;
 }
 
@@ -289,7 +372,6 @@ int GetSliceDataV(SALEcData * _sdata, SliceFilter * _out, unsigned long Id)
 
     return nx*ny;
 }
-
 
 #define SAFEFREE(x) if(NULL!=(x)) {free(x); x=NULL;}
 void CleanSlice(SliceFilter * _out)
@@ -403,6 +485,15 @@ int WriteSliceDataAll(SALEcData * _sdata, SliceFilter * _out, const char * _out_
         fprintf(stdout,"(%s)",_sdata->VSF->CellField[k].Name);
         vtk_dataarray_vecf(fp,_sdata->VSF->CellField[k].Name,"binary",_out->data_vars,len_celldata,_out->NoC);
     }
+    // export blockid
+    GetSliceDataC_BlockId(_sdata, _out);
+    fprintf(stdout,"(%s)","BlockId");
+    vtk_dataarray_vecf(fp,"BlockId","binary",_out->data_vars,len_celldata,_out->NoC);
+    GetSliceDataC_DX(_sdata,_out);
+    fprintf(stdout,"(%s)","DX");
+    vtk_dataarray_vecf(fp,"DX","binary",_out->data_vars,len_celldata,_out->NoC);
+
+
     vtk_cell_data_trailer(fp);
     vtk_output_coordf(fp,"binary",_out->data_coord,len_pointdata);
     fprintf(stdout,"(COORD)");
@@ -490,4 +581,113 @@ float CheckVtsPointField(SALEcData * _s, const char * name)
     return 0;
 }
 
+int WriteSliceDataDerived(SALEcData * _sdata, SliceFilter * _out,const char * _name,const char * _out_name)
+{
+    FILE * fp = fopen(_out_name,"w");
+    if(fp == NULL)
+    {
+        fprintf(stdout,"%s:cannot open %s\n",__func__,_out_name);
+        return 0;
+    }
+    fprintf(stdout, "==>Write %s\n", _out_name);
+    strcpy(_out->Name, _name);
 
+    char whole_extent[4096], piece_extent[4096];
+    //snprintf(whole_extent,4096,"%d %lu %d %lu 0 0",1,_out->shape[0]-1,1,_out->shape[1]-1);
+    snprintf(whole_extent,4096,"%d %lu %d %lu 0 0",1,_out->shape[0],1,_out->shape[1]);
+    snprintf(piece_extent,4096,"%d %lu %d %lu 0 0",1,_out->shape[0],1,_out->shape[1]);
+    int len_pointdata = _out->shape[0]*_out->shape[1];
+    int len_celldata = (_out->shape[0] - 1)*(_out->shape[1] - 1);
+    vts_file_header(fp,piece_extent,whole_extent);
+    vtk_point_data_header_with_attr(fp," ");
+    // export point data
+    vtk_point_data_trailer(fp);
+    vtk_cell_data_header(fp);
+    // export cell data
+    GetSliceProfile(_sdata,_out,0.95);
+    fprintf(stdout,"(%s)",_out->Name);
+    vtk_dataarray_vecf(fp,"profile","binary",_out->data_vars,len_celldata,_out->NoC);
+
+    vtk_cell_data_trailer(fp);
+    vtk_output_coordf(fp,"binary",_out->data_coord,len_pointdata);
+    fprintf(stdout,"(COORD)");
+    vts_file_trailer(fp);
+    fprintf(stdout,"\n");
+    fclose(fp);
+    return 1;
+}
+
+int GetSliceProfile(SALEcData * _sdata, SliceFilter * _out, double _tol)
+{
+    /// nCL is the vertex number.
+    /// change nx,ny to nCL - 1, added 2025/03/18
+    VtsInfo * _vsf = _sdata->VSF;
+
+    unsigned Idvof0 = find_cellfield("VOF-0", _vsf);
+    unsigned Idvof1 = find_cellfield("VOF-1", _vsf);
+    unsigned Idvof2 = find_cellfield("VOF-2", _vsf);
+    unsigned Idrho  = find_cellfield("Density", _vsf);
+
+    assert(Idvof0 <100 && Idrho <100);
+
+    _out->Id = Idvof0;
+    _out->NoC = 4;
+    if(NULL != _out->data_vars)
+    {
+        free(_out->data_vars);
+    }
+
+    _out->data_vars = (VTSDATAFLOAT*) malloc(sizeof(VTSDATAFLOAT)*(_out->nCL[0]*_out->nCL[1])*(_out->NoC));
+    int nx = _out->nCL[0]-1, ny = _out->nCL[1]-1;
+    for(unsigned long ix=0;ix<nx;ix++)
+    {
+        for(unsigned long jy=0;jy<ny;jy++)
+        {
+            // column array
+            _out->data[ix][jy] =  _out->data_vars + (ix + jy*nx)*(_out->NoC);
+        }
+    }
+
+    #pragma omp parallel for collapse(2) num_threads(LOADTHREADS) shared(_sdata,_out,Idvof1,Idvof2,_tol) schedule(dynamic) default(none)
+    for(unsigned long ix=0;ix<_sdata->nGCLC[0];ix++)
+    {
+        for(unsigned long jy=0;jy<_sdata->nGCLC[1];jy++)
+        {
+            /// calculate the surface topology
+            unsigned long zColumn = _sdata->nGCLC[2];
+            VTSDATAFLOAT * zColData = (VTSDATAFLOAT *) malloc(sizeof(VTSDATAFLOAT)*zColumn);
+            zColData[0] = VtmGetCellData(_sdata,_out->Id,ix,jy,0)[0];
+            for(unsigned long kz=1;kz<zColumn;++kz)
+            {
+                zColData[kz] = VtmGetCellData(_sdata,_out->Id,ix,jy,kz)[0];
+                if(zColData[kz]>_tol)
+                {
+                    VTSDATAFLOAT Lambda = (_tol-zColData[kz-1])/(zColData[kz] - zColData[kz-1]);
+                    if(Lambda > 1.0) Lambda = 1.0;
+                    if(Lambda < 0.0) Lambda = 0.0;
+                    _out->data[ix][jy][0] = _sdata->GCLC[2][kz]*Lambda + _sdata->GCLC[2][kz-1]*(1.-Lambda);
+                    break;
+                }
+            }
+            free(zColData);
+
+            /// calculate the thickness of material (vof1, vof2)
+            _out->data[ix][jy][1] = 0;
+            _out->data[ix][jy][2] = 0;
+            for(unsigned long kz=1;kz<zColumn;++kz)
+            {
+                VTSDATAFLOAT dz = _sdata->GCLC[2][kz] - _sdata->GCLC[2][kz-1];
+                if(Idvof1 < 100)
+                {
+                    _out->data[ix][jy][1] += dz*VtmGetCellData(_sdata,Idvof1,ix,jy,kz)[0];
+                }
+                if(Idvof2 < 100)
+                {
+                    _out->data[ix][jy][2] += dz*VtmGetCellData(_sdata,Idvof2,ix,jy,kz)[0];
+                }
+            }
+        }
+    }
+
+    return 0;
+}

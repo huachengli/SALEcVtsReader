@@ -27,6 +27,8 @@ typedef struct EjectaImpl
     double maxtem;
     double pre;
     double tem;
+    double r;
+    double dis;
 
     int matid;
     int rank;
@@ -63,5 +65,10 @@ void numerical_ejecta_orbit_moon(ejecta_collect * _ec, double dt);
 double approximate_ejecta(double *x, double *v, double R, double g0);
 void analytical_ejecta_orbit_moon(ejecta_collect * _ec, double R, double g0);
 void calculate_ejecta_thickness(citcoms_sphere * _cs, ejecta_collect * _ec, double R);
+void calculate_ejecta_thickness_pg(citcoms_sphere * _cs, ejecta_collect * _ec, double R);
+void remove_center_ejecta(citcoms_sphere * _cs, double _t0, double *);
+void calculate_land_skew(ejecta_collect * _ec, double * _c, double R);
+void adjust_coordinate(citcoms_sphere * _cs, double R);
+int marker_from_fn(citcoms_sphere * _cs,int start_cap, int (*fn)(citcoms_sphere *, double *), double *pars);
 
 #endif //SALECVTSREADER_EJECTA_ANALYSIS_H

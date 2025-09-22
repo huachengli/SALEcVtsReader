@@ -66,18 +66,18 @@ int main(int argc,char * argv[])
         gTracer.step = step;
         snprintf(data_name, MAXNAMELEN*2, "%s/vtp/%s.tracer.proc%%04d.%04d.vtp", data_dir, gTracer.prefix, step);
         VtpTracerCollect * tfcp = FlushVtpTracerCollect(gTracer_ptr,data_name, gTracer.nvtp);
-        // FlushGridTracerFromVtpCollect(gTracer_ptr,tfcp);
         char post_vts_name[MAXNAMELEN*2];
         snprintf(post_vts_name, MAXNAMELEN*2, "%s/post/%s.post.%04d.vts", data_dir, gTracer.prefix, step);
 
         if(write_vts > 0 && step%write_vts == 0)
         {
             WriteGridTracer(gTracer_ptr,post_vts_name);
-            fprintf(stdout," post/vts ");
+            // fprintf(stdout," post/vts ");
         }
 
         snprintf(post_vts_name, MAXNAMELEN*2, "%s/post/%s", data_dir, gTracer.prefix);
-        fprintf(stdout," post/bin ");
+        // fprintf(stdout," post/bin ");
+
         ExportGridTracerF32Bin(gTracer_ptr,post_vts_name);
         CloseVtpTracerCollect(tfcp);
         fprintf(stdout,")\n");

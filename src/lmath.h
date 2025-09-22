@@ -4,7 +4,7 @@
 
 #ifndef SALECVTSREADER_LMATH_H
 #define SALECVTSREADER_LMATH_H
-
+#include "lmath3d8.h"
 #include <assert.h>
 #include <sys/time.h>
 #include <stdio.h>
@@ -30,6 +30,10 @@ void VecAdd(double *x , const double *y, double p,int n);
 void VecScale(double *x, double px, int n);
 void VecCopy(double * y, double * x, int n);
 void VecD2F(float *y, const double * x, int n);
+void VecF2D(double *y, const float * x, int n);
 void VecRotate(double * x, double ro, double fo, int n);
-
+void Contour(double **d, int ilb, int iub, int jlb, int jub,
+             double *x, double *y, double z,
+             double ** con_pts, int * num_pts);
+void Contour_pts_sort(double * con_pts, int * num_pts, int ** pseg, double tol);
 #endif //SALECVTSREADER_LMATH_H

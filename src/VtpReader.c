@@ -169,4 +169,25 @@ int WriteVtpFile(VtpFile * _vsf)
     return _vsf->NoP;
 }
 
+int WriteVtpTxt(VtpFile * _vsf)
+{
+    char txt_name[4096];
+    snprintf(txt_name, 4096, "%s.txt", _vsf->name);
+    FILE * fp = fopen(txt_name,"wb");
+    fprintf(fp,"nop,%d\n",_vsf->PointNoF);
+
+    for(int k=0;k<_vsf->PointNoF;++k)
+    {
+        VtpData * _vdk = _vsf->PointField + k;
+        fprintf(fp,"%s,%d,%d\n",_vdk->Name,_vdk->NoC,_vdk->DataLen);
+    }
+    for(int k=0;k<_vsf->PointNoF;++k)
+    {
+        VtpData * _vdk = _vsf->PointField + k;
+        fwrite(_vdk->Data, sizeof(vts_float), _vdk->DataLen, fp);
+    }
+    fclose(fp);
+    return _vsf->NoP;
+}
+
 

@@ -144,6 +144,7 @@ VTSDATAFLOAT* VtmGetPointData(SALEcData * _sdata, unsigned long k, unsigned long
 char * head__strcasestr(const char * src, const char *tgt);
 unsigned long find_cellfield(const char _src[], VtsInfo * _vsf);
 unsigned long find_pointfield(const char _src[], VtsInfo * _vsf);
+#define UNKNOWNFIELD 100
 
 // function using cache to search profile
 void GetProfileLim(SALEcData * _sdata, Plane * _out, VTSDATAFLOAT _tol);

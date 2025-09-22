@@ -72,6 +72,7 @@ int ShowBriefVtpColleect(VtpTracerCollect * vtc, FILE * fp);
 VtpFile * SALEcVtpCollectMatFilter(VtpTracerCollect * vtc);
 VtpFile * SALEcVtpCollectPosFilter(VtpTracerCollect * vtc);
 VtpFile * SALEcVtpCollectPosFuncFilter(VtpTracerCollect * vtc, int (*tf)(const double*,const double*),const double * ctx);
+VtpFile * SALEcVtpCollectPosFuncFilter2(VtpTracerCollect * vtc, int (*tf)(const double*,void *),void * ctx);
 VtpFile * VtpGetMelting(VtpFile * in);
 VtpFile * VtpGetConnect(VtpFile * in, VtpTracerCollect * vtc,SALEcData * ref);
 int InitGridTracer(GridTracer * gtf,InputFile * ifp);

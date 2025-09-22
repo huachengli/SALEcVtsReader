@@ -27,7 +27,7 @@ void Load2dInpInfo(SALEcData * _sdata,SALEcPlanetInfo * _pdata,const char* _inpu
     if(0!= strcasecmp(TargetType,"sphere") && 0!= strcasecmp(TargetType,"plane"))
     {
         fprintf(stdout,"%s:target type = %s\n",__func__ ,TargetType);
-        exit(0);
+        exit(1);
     }
 
     if(NULL != _pdata)
@@ -410,7 +410,7 @@ void LoadVts2dData(SALEcData * _sdata,const char * _vtsPrefix)
 
     strcpy(_sdata->VtsPrefix,_vtsPrefix);
     int TaskFinished = 0;
-#pragma omp parallel for num_threads(12) shared(_sdata,stdout,TaskFinished) default(none)
+#pragma omp parallel for num_threads(OMP2D_THREADS) shared(_sdata,stdout,TaskFinished) default(none)
     for(int k=0;k<_sdata->VtsBlockNum;++k)
     {
         char VtsName[200];
@@ -418,7 +418,7 @@ void LoadVts2dData(SALEcData * _sdata,const char * _vtsPrefix)
         FILE * fp = fopen(VtsName,"r");
         if(NULL==fp)
         {
-            fprintf(stdout,"cannot open %s\n",VtsName);exit(0);
+            fprintf(stdout,"cannot open %s\n",VtsName);exit(1);
         }
 
         if(DEBUG_UTILITY2D)

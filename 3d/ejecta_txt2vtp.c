@@ -80,13 +80,29 @@ int main(int argc,char * argv[])
         ejecta_collect_to_vtp(&EC,_vtp_name);
     }
 
-    citcoms_sphere * _cs = init_citcoms_sphere3(12, 128, 4);
+    citcoms_sphere * _cs = init_citcoms_sphere3(12, 256, 4);
     const char _prefix[] = "ejecta_txt";
-    set_ring_scope(_cs,"inring.txt");
-    calculate_ejecta_thickness(_cs, &EC, 1.740e6);
-    write_citcoms_sphere(_cs,NULL, _prefix);
+    char ring_file[1024];
+    GetValueS(ifp,"ejecta.ring",ring_file,"none");
+    if(0!= strcasecmp(ring_file,"none"))
+    {
+        set_ring_scope(_cs, ring_file);
+    }
+    /// calculate_ejecta_thickness(_cs, &EC, 1.740e6);
+    double crater[10];
+    calculate_ejecta_thickness_pg(_cs, &EC, Rm);
+    remove_center_ejecta(_cs, 200.0, crater);
+    adjust_coordinate(_cs,Rm);
 
+    /// calculate velocity direction
+    calculate_land_skew(&EC, crater, Rm);
+
+    write_citcoms_sphere(_cs,NULL, _prefix);
+    char _vtp_name[1025];
+    snprintf(_vtp_name,1024,"%s.vtp",EC.output);
+    ejecta_collect_to_vtp(&EC,_vtp_name);
     fprintf(stdout,"\n %d ejecta detected\n",EC.len);
+
     ejecta_collect_test_clean(&EC);
     clean_citcoms_sphere(_cs);
 

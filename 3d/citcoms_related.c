@@ -366,18 +366,10 @@ void pg_sphere_coordinates(const double * xl, double pos[], const double P[][3],
     VecCopy(pos, Rm, 3);
 }
 
-int set_citcoms_sphere_coord(citcoms_sphere * _cs, int mcap)
+
+int init_pg_sphere_corner(citcoms_sphere * _cs)
 {
-    citcoms_sphere_dump * _cap_data = _cs->cap + mcap;
     /// set corner spherical coordinates
-    typedef struct SphereCoord
-    {
-        double theta[5];
-        double fi[5];
-        double P[3][3];
-        double Q[3][3];
-        double R[3];
-    } scoord;
     scoord _cap[13];
     float offset = 9.736 / 180.0 * M_PI;
     for(int i = 1; i <= 4; i++)
@@ -427,7 +419,7 @@ int set_citcoms_sphere_coord(citcoms_sphere * _cs, int mcap)
         }
 
         // rotate the corner for compatibility with full_node_location
-        double ro = -0.5 * (M_PI / 4.0) / _cap_data->nox;
+        double ro = -0.5 * (M_PI / 4.0) / _cs->cap[0].nox;
         double fo = 0.0;
         for(int i = 1; i <= 4; i++)
             VecRotate(cap_corner[i - 1], ro, fo, 3);
@@ -450,8 +442,19 @@ int set_citcoms_sphere_coord(citcoms_sphere * _cs, int mcap)
             VecAdd(R0, cap_corner[k], 0.25, 3);
         VecNormalize(R0, 3);
         VecCopy(_cap[cap_id].R, R0, 3);
+        _cap[cap_id].dx = -1.0;
     }
+    memcpy(_cs->cap_info, _cap, sizeof(scoord)*13);
+    return 0;
+}
 
+
+int set_citcoms_sphere_coord(citcoms_sphere * _cs, int mcap)
+{
+
+    citcoms_sphere_dump * _cap_data = _cs->cap + mcap;
+    scoord * _cap = _cs->cap_info + mcap + 1;
+    _cap->dx = 2.0;
     // set coordinates of mcap
     for(int zid = 1; zid <= _cap_data->noz; ++zid)
     {
@@ -467,10 +470,14 @@ int set_citcoms_sphere_coord(citcoms_sphere * _cs, int mcap)
                         (zid-1.0)/(_cap_data->noz-1.0)
                 };
                 double pos[3] = {0.0};
-                pg_sphere_coordinates(xl, pos, _cap[mcap+1].P, _cap[mcap+1].Q);
+                pg_sphere_coordinates(xl, pos, _cap->P, _cap->Q);
                 _cap_data->pos[3*n2+ 0] = (float) pos[0];
                 _cap_data->pos[3*n2+ 1] = (float) pos[1];
                 _cap_data->pos[3*n2+ 2] = (float) pos[2];
+
+                double dx_local = VecDot(pos, _cap->R, 3);
+                if(dx_local < _cap->dx)
+                    _cap->dx = dx_local;
             }
         }
     }
@@ -494,19 +501,13 @@ citcoms_sphere * init_citcoms_sphere3(int npx, int nx, int noc)
     assert(noc >= 1);
     assert(_cs->nproc_surf >= 1);
     _cs->cap = (citcoms_sphere_dump *)malloc(sizeof(citcoms_sphere_dump)*_cs->nproc_surf);
-
-    /// allocate sphere
     for(int k=0; k< _cs->nproc_surf; ++k)
     {
         const int nox = nx;
         const int noy = nx;
-        const int noz = nx;
+        const int noz = 1;
         const int nel = (nox - 1) * (noy - 1);
         const int nno = nox * noy;
-
-        _cs->cap[k].pos = (float *) malloc(sizeof(float) * nno * 3);
-        _cs->cap[k].data = (float *) malloc(sizeof(float) * nel * noc);
-        _cs->cap[k].pdata = (float *) malloc(sizeof(float) * nno * noc);
 
         _cs->cap[k].nno = nno;
         _cs->cap[k].nel = nel;
@@ -514,6 +515,20 @@ citcoms_sphere * init_citcoms_sphere3(int npx, int nx, int noc)
         _cs->cap[k].nox = nox;
         _cs->cap[k].noy = noy;
         _cs->cap[k].noz = noz;
+    }
+    init_pg_sphere_corner(_cs);
+    /// allocate sphere
+    for(int k=0; k< _cs->nproc_surf; ++k)
+    {
+        const int nox = nx;
+        const int noy = nx;
+        const int noz = 1;
+        const int nel = (nox - 1) * (noy - 1);
+        const int nno = nox * noy;
+
+        _cs->cap[k].pos = (float *) malloc(sizeof(float) * nno * 3);
+        _cs->cap[k].data = (float *) malloc(sizeof(float) * nel * noc);
+        _cs->cap[k].pdata = (float *) malloc(sizeof(float) * nno * noc);
 
         const int kz = noz - 1;
         set_citcoms_sphere_coord(_cs, k);
@@ -634,6 +649,10 @@ int write_citcoms_sphere(citcoms_sphere * _cs, CitcomsData * _cd,const char * _n
         vts_file_header(vts_fp, piece_extent, whole_extent);
         vtk_point_data_header(vts_fp);
         vtk_dataarray_vec_f(vts_fp, "dist", "binary", _csd->pdata, _csd->nno, _csd->noc);
+        if(_csd->pmarker != NULL)
+        {
+            vtk_dataarray_vec_f(vts_fp, "pmarker", "binary", _csd->pmarker, _csd->nno, 1);
+        }
         vtk_point_data_trailer(vts_fp);
         vtk_cell_data_header(vts_fp);
         vtk_dataarray_vec_f(vts_fp, "dump", "binary", _csd->data, _csd->nel, _csd->noc);
@@ -1674,23 +1693,34 @@ int citcoms_check_tracer_element(citcoms_dump * _cd)
 
 double solve_local(double * x,double * v2, double * v1, double * v0)
 {
+    const double tol = 1e-6;
     double a = VecDot(v2,x,3);
     double b = VecDot(v1,x,3);
     double c = VecDot(v0,x,3);
+
+    if(fabs(a) < 1.0e-12*fabs(b) || fabs(a) < 1.0e-12*fabs(c))
+    {
+        return -c/b;
+    }
 
     b = b/a * 0.5;
     c = c/a * 0.5;
     a = 0.5;
 
     double delta = b*b - 4.0*a*c;
-    assert(delta >= 0.0);
+
+    if(delta < -1.0e-8)
+        return 2.0;
+    else if(delta < 0.0)
+        delta = 0.0;
+
     delta = sqrt(delta);
 
     // fprintf(stdout,"a=%f, b=%f, c=%f",a,b,c);
     double x1 = -b + delta;
     double x2 = -b - delta;
 
-    if(x1 < 0.0 || x1 > 1.0) return x2;
+    if(x1 < 0.0 - tol || x1 > 1.0 + tol) return x2;
     return x1;
 }
 
@@ -2100,8 +2130,8 @@ int update_melting(CitcomsData * _cdata)
         for(int j=0;j<nno;++j)
         {
             double Ts=0, Tl=0, Ts_diff=0;
-            int eid[4] = {0};
-            citcoms_eid(j+1, eid, nox, noy, noz);
+            // int eid[4] = {0};
+            // citcoms_eid(j+1, eid, nox, noy, noz);
             float rj = VecLenF(position + 3*j,3);
             int i = bSearch(rj,_cdata->gr,_cdata->nprocz*(_cdata->noz-1)+1);
             double xli = (rj - _cdata->gr[i])/(_cdata->gr[i+1] - _cdata->gr[i]);

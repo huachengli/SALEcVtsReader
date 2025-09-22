@@ -45,6 +45,7 @@ int VtpFrameLoad(VtpFile * _vsf,FILE *fp);
 int ShowVtpFileInfo(VtpFile * vfp);
 int VtpCoordinateReshape(VtpFile * _vsf);
 int WriteVtpFile(VtpFile * _vsf);
+int WriteVtpTxt(VtpFile * _vsf);
 
 typedef struct {
     char TagName[MaxStrLen];

@@ -101,4 +101,6 @@ extern void (*ReadDataArrayProperty[])(const char * _vbuffer, unsigned int * _st
 extern char DataArrayProperty[][100];
 extern char TagName[][100];
 extern void (*TagNameP[])(const char*,VtsInfo *);
+
+typedef VTSDATAFLOAT vts_float;
 #endif //SALECVTSREADER_VTSREADER_H
